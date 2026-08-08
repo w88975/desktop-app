@@ -69,7 +69,7 @@ Anthropic（API Key / Claude Max OAuth）、Google AI Studio、ChatGPT Plus（Co
 Electron 桌面应用、headless 服务端（可 Docker 部署）、浏览器 WebUI、只读分享页 viewer、CLI 客户端。桌面应用可连接远程服务器上的 workspace。
 
 **其它**
-自动化规则引擎（事件 / cron 触发）、消息网关（Telegram / WhatsApp 接入）、级联主题系统、7 种语言的 i18n、文档处理工具链（PDF / Office / 图片，基于 Python + uv）。
+自动化规则引擎（事件 / cron 触发）、消息网关（**Lark / 飞书、Telegram、WhatsApp** 接入）、级联主题系统、7 种语言的 i18n、文档处理工具链（PDF / Office / 图片，基于 Python + uv）。
 
 ## 上游英文文档可信度
 

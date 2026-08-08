@@ -186,7 +186,19 @@ graph TD
 
 ### `packages/messaging-gateway` / `packages/messaging-whatsapp-worker`
 
-把 Agent 会话接到即时通讯软件（Telegram / WhatsApp）。`gateway.ts`、`router.ts`、`registry.ts`、`topic-registry.ts`、`pairing.ts`、`access-control.ts`。WhatsApp 因为依赖太重，单独跑在 worker 子进程里。
+把 Agent 会话接到即时通讯软件。核心文件：`gateway.ts`、`router.ts`、`registry.ts`、`topic-registry.ts`、`pairing.ts`、`access-control.ts`、`event-fanout.ts`、`renderer.ts`。
+
+`src/adapters/` 下**三个平台适配器**，都实现同一个 `PlatformAdapter` 接口：
+
+| 适配器 | 运行方式 | 消息编辑 | 内联按钮 | 单条长度上限 | Markdown |
+|---|---|---|---|---|---|
+| `lark` | 进程内，`@larksuiteoapi/node-sdk` 的 WSClient 长轮询 | ✅ | ✅ | 30000 | `lark-post` |
+| `telegram` | 进程内，grammY | ✅ | ✅ | — | `v2` |
+| `whatsapp` | **独立 worker 子进程**（Baileys 依赖太重） | ❌ | ❌ | — | `whatsapp` |
+
+三者 `webhookSupport` 都是 `false` —— 全部走长轮询/长连接，**不需要公网可达的回调地址**，这对桌面应用是正确的选择。
+
+> **Lark 与飞书是两个独立生态**，共用同一套 SDK 与协议，但机器人只能注册在其中一个开放平台上。由配置里的 `domain` 字段区分：`'lark'` → `open.larksuite.com`（国际版），`'feishu'` → `open.feishu.cn`（中国版）。
 
 ## 边界红线
 
