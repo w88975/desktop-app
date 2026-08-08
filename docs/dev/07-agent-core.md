@@ -257,12 +257,16 @@ Pi SDK 原生事件     ──→ PiEventAdapter    ──┘
 
 ## 如何接入一个新的模型供应商
 
-**先看它是不是 OpenAI 兼容或已被 Pi 支持的协议。** 绝大多数情况下答案是「是」，那就完全不需要碰后端代码：
+**先看它是不是 OpenAI 兼容或已被 Pi SDK 支持的供应商。** 绝大多数情况下答案是「是」，那就完全不需要碰后端代码 —— 多数时候连代码都不用写，在应用界面里配一个连接即可。
 
-1. 在 `packages/shared/src/config/models-pi.ts` 的 provider 目录里加条目（供应商元信息、模型列表、显示名）
-2. 需要新的认证方式时，在 `packages/shared/src/auth/` 加对应的 OAuth 流程；仅 API Key 或 bearer 的话现成的就够
-3. 建一个 `providerType: 'pi'` 的 `LlmConnection`，配上 `piAuthProvider` / `baseUrl` / `customEndpoint`
-4. 如果模型能力（上下文窗口、是否支持图片）需要逐个覆盖，走 `customModels` 的对象形式
+| 情况 | 做法 | 需要写代码吗 |
+|---|---|---|
+| Pi SDK 已支持这个供应商 | 建 `providerType: 'pi'` + `piAuthProvider: '<供应商名>'` 的连接 | 不用 |
+| OpenAI / Anthropic 协议兼容的自建端点 | 建 `providerType: 'pi_compat'` + `authType: 'api_key_with_endpoint'` + `customEndpoint` 的连接 | 不用 |
+| 需要新的 OAuth 流程 | 在 `packages/shared/src/auth/` 加流程 | 要 |
+| 协议完全不兼容 | 才考虑新 backend（见下节） | 大量 |
+
+关键事实：**Pi 的供应商与模型目录是从 Pi SDK 运行时发现的**，不是我们仓库里的硬编码列表 —— `packages/shared/src/config/models-pi.ts` 调 `getProviders()` / `getModels()` 拿数据，我们只维护排除清单和显示名覆盖。所以「Pi 支持了新供应商」通常意味着升级 SDK 版本，而不是改我们的代码。
 
 `packages/shared/CLAUDE.md` 明确写了这条约定：
 

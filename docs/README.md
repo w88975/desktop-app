@@ -15,7 +15,14 @@
 | [05-architecture](dev/05-architecture.md) | 进程与包依赖总图、三进程模型、桌面端/服务端/浏览器端如何复用同一套逻辑 | 建立整体心智模型 |
 | [06-rpc](dev/06-rpc.md) | WS RPC 协议全貌、信道分类、新增 RPC 方法的完整改动面 | 要加后端方法时 |
 | [07-agent-core](dev/07-agent-core.md) | 双后端架构、pi Agent、事件归一、一次对话的完整生命周期 | 碰 Agent 行为时 |
-| 08–15 | 模型与供应商、工具与 Source、数据模型、UI、构建部署、品牌解耦、实操教程、踩坑集锦 | 第二批交付 |
+| [08-models-providers](dev/08-models-providers.md) | LlmConnection、三个 providerType、Pi 模型目录、接新供应商的三条路 | 要接模型时 |
+| [09-tools-sources-mcp](dev/09-tools-sources-mcp.md) | 工具的三个来源、session 工具注册表、Source、MCP 代理、权限系统 | 要加工具或接外部系统时 |
+| [10-sessions-data](dev/10-sessions-data.md) | 目录全景、JSONL 持久化、Label/Status/View/Task/Automation 数据模型 | 碰持久化时 |
+| [11-ui](dev/11-ui.md) | 渲染层结构、状态分层、event-processor、路由、设置页、i18n | 改 UI 时 |
+| [12-build-deploy](dev/12-build-deploy.md) | 四条构建产线、打包签名、headless 部署、Docker、自动更新、Sentry | 要发版或部署时 |
+| [13-branding-decoupling](dev/13-branding-decoupling.md) | Craft 强绑定点逐条清单 + 同步影响与数据兼容性评估 | 做换皮或私有化时 |
+| **教程** | [加一个设置项](dev/14-walkthroughs/add-setting.md) · [接入自建模型端点](dev/14-walkthroughs/add-model-endpoint.md) · [加一个业务工具](dev/14-walkthroughs/add-tool.md) | 从「读懂」到「能改」 |
+| [15-gotchas](dev/15-gotchas.md) | 踩坑集锦，按「症状 → 根因」组织 | 出问题时先查这里 |
 
 ## 专题文档
 
@@ -43,10 +50,10 @@
 
 | 你要做的事 | 接着读 |
 |---|---|
-| 改 UI / 加页面 / 换视觉 | 11-ui → 13-branding-decoupling → 教程「加一个设置项」 |
-| 接自有模型 / 私有 LLM 网关 | 07-agent-core → 08-models-providers → 教程「接入自建端点」 |
-| 加业务工具 / 接内部系统 | 09-tools-sources-mcp → 教程「加一个工具」 |
-| 私有化部署 / 平台化 | 06-rpc → 12-build-deploy → 13-branding-decoupling |
+| 改 UI / 加页面 / 换视觉 | [11-ui](dev/11-ui.md) → [13-branding-decoupling](dev/13-branding-decoupling.md) → 教程[加一个设置项](dev/14-walkthroughs/add-setting.md) |
+| 接自有模型 / 私有 LLM 网关 | [07-agent-core](dev/07-agent-core.md) → [08-models-providers](dev/08-models-providers.md) → 教程[接入自建模型端点](dev/14-walkthroughs/add-model-endpoint.md) |
+| 加业务工具 / 接内部系统 | [09-tools-sources-mcp](dev/09-tools-sources-mcp.md) → 教程[加一个业务工具](dev/14-walkthroughs/add-tool.md) |
+| 私有化部署 / 平台化 | [06-rpc](dev/06-rpc.md) → [12-build-deploy](dev/12-build-deploy.md) → [13-branding-decoupling](dev/13-branding-decoupling.md) |
 
 ## 与其它文档的关系
 
@@ -63,4 +70,5 @@
 
 - 每篇文档顶部的 `> 基于上游 vX · 核验于 YYYY-MM-DD` 表明该篇最后一次对着代码核验的时间。改动涉及某篇内容时，更新正文并刷新这一行。
 - 文档中引用代码只写到**文件路径与符号名**，不写行号 —— 行号在上游同步后必然失效。
-- 校验脚本 `scripts/check-docs-links.ts`（扫描文档中的仓库路径引用、验证文件仍存在）随第二批交付，届时接入 `validate:ci`。
+- `bun run lint:docs-links` 校验文档中的仓库路径与相对链接是否仍然有效，已接入 `validate:ci`。
+  刻意不存在的路径（构建产物、教程示例、用于说明「此文件已失效」的举例）在 `scripts/check-docs-links.ts` 的 `KNOWN_ABSENT` 里豁免，或在该行加 `docs-links-ok` 注释。

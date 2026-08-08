@@ -181,11 +181,25 @@ export function registerSessionsHandlers(server: RpcServer, deps: HandlerDeps): 
 
 > ⚠️ **只有真正需要 Electron 的 handler 才放 `apps/electron/src/main/handlers/`。** headless 服务端只注册 core handler，放错位置会导致「桌面版有、服务端版没有」。
 
-### 第 5 处：新增 LOCAL_ONLY 时别忘了 webui
+### 第 5 处：webui 可能需要一个 web 等价实现
 
-webui 跑在浏览器里，没有本地 Electron。`apps/webui/src/adapter/web-api.ts` 逐个覆盖了 LOCAL_ONLY 方法的 web 等价实现。
+先澄清一个容易搞混的点：**webui 里没有 `RoutedClient`**。它用 `apps/webui/src/adapter/web-api.ts` 里的单个 `WsRpcClient` 直接 `buildClientApi()`，`isLocalOnly()` 根本不参与。所以在 webui 里，**所有信道都发往服务端**。
 
-**新增 LOCAL_ONLY 信道时，如果 webui 也需要这个能力，必须在这里补一个实现**，否则 webui 会静默缺功能（调用落到本地客户端，而浏览器里根本没有本地客户端）。REMOTE_ELIGIBLE 信道不受影响。
+于是判断标准不是「这个信道是不是 LOCAL_ONLY」，而是：
+
+> **headless 服务端注册了这个信道的 handler 吗？**
+
+| 情况 | webui 的结果 |
+|---|---|
+| handler 在 `server-core/handlers/rpc/`（core handler） | ✅ 正常工作，即使信道被分类为 LOCAL_ONLY |
+| handler 只在 `apps/electron/src/main/handlers/`（GUI handler） | ❌ 服务端没注册 → `CHANNEL_NOT_FOUND` |
+| 能力在浏览器里根本不存在（原生对话框、窗口管理、`shell` 打开） | ❌ 必须在 `web-api.ts` 里覆盖成 web 等价实现 |
+
+`web-api.ts` 覆盖的正是后两类：文件选择改用 `<input type=file>`，文件夹选择直接返回 `null`，`openFile` / `showInFolder` 是 no-op，`getRuntimeEnvironment()` 返回 `'web'`。
+
+**新增信道时的自检**：handler 放在 core 里了吗？没有的话 webui 需要什么行为？
+
+客户端可以用 `window.electronAPI.isChannelAvailable(channel)` 判断服务端有没有注册 —— 这个信息来自握手时服务端回的 `registeredChannels`。
 
 ## 服务端 → 客户端：推送与反向调用
 
