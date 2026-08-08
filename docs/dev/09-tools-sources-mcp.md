@@ -201,6 +201,35 @@ Bash 命令解析在 `agent/bash-validator.ts`（Windows 下另有 `powershell-v
 
 加新的读类命令模式时改这个文件，不要在权限逻辑里散写特判。
 
+## 文档处理工具链
+
+除了 session 工具和 Source 工具，还有一组**命令行工具**，Agent 通过 Bash 调用它们处理文档。
+
+八个工具，都在 `apps/electron/resources/bin/`（每个配一份 `.cmd` 供 Windows 用）：
+
+| 工具 | 能力 | Python 实现 |
+|---|---|---|
+| `markitdown` | 任意文档转 Markdown（`.docx` / `.xlsx` / `.pptx` / `.pdf` / `.html` / `.ipynb`） | `markitdown_cli.py` |
+| `pdf-tool` | PDF 提取文本、合并、拆分、查信息 | `pdf_tool.py` |
+| `xlsx-tool` | 读写导出表格（`.xlsx` / `.csv`） | `xlsx_tool.py` |
+| `docx-tool` | 创建与修改 Word 文档，支持基础格式 | `docx_tool.py` |
+| `pptx-tool` | 读取与检查 PPT 内容 | `pptx_tool.py` |
+| `img-tool` | 图片缩放、转换、提取元数据（`.png` / `.jpg` / `.webp` / `.gif` / `.svg`） | `img_tool.py` |
+| `doc-diff` | 比较两个文档的差异 | `doc_diff.py` |
+| `ical-tool` | 解析日历文件（`.ics`） | `ical_tool.py` |
+
+Python 脚本在 `apps/electron/resources/scripts/`，全部支持 `--help`。
+
+**运行时是打包进来的 `uv`**（首次 `electron:dev` 会自动下载到 `apps/electron/resources/bin/<platform>-<arch>/`），不依赖用户机器上的 Python。
+
+冒烟测试：
+
+```bash
+bun run test:doc-tools     # 已接进 validate:dev / validate:ci
+```
+
+> 加新文档工具：写 `resources/scripts/xxx_tool.py` + `resources/bin/xxx-tool` 与 `.cmd` 包装 + 在 `electron-builder.yml` 的 `files` 里登记 + 补一个 smoke test 并加进 `test:doc-tools`。用法层面靠工具自己的 `--help` 让模型发现，不需要注册成 session 工具。
+
 ## Skills
 
 Skill 是给模型读的提示词包，不是代码插件。

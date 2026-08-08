@@ -23,6 +23,9 @@
 | [13-branding-decoupling](dev/13-branding-decoupling.md) | Craft 强绑定点逐条清单 + 同步影响与数据兼容性评估 | 做换皮或私有化时 |
 | **教程** | [加一个设置项](dev/14-walkthroughs/add-setting.md) · [接入自建模型端点](dev/14-walkthroughs/add-model-endpoint.md) · [加一个业务工具](dev/14-walkthroughs/add-tool.md) | 从「读懂」到「能改」 |
 | [15-gotchas](dev/15-gotchas.md) | 踩坑集锦，按「症状 → 根因」组织 | 出问题时先查这里 |
+| [16-messaging](dev/16-messaging.md) | 消息网关：飞书/Telegram/WhatsApp 适配器、绑定、准入、配对、加新平台 | 要接 IM 时 |
+| [17-browser](dev/17-browser.md) | 内置浏览器：CDP、反向 RPC、`browser_tool` 命令集、浮层规则 | 碰浏览器能力时 |
+| [18-config-reference](dev/18-config-reference.md) | `config.json` / `preferences.json` / workspace 配置的全量字段表 | 查字段时 |
 
 ## 专题文档
 
@@ -54,6 +57,8 @@
 | 接自有模型 / 私有 LLM 网关 | [07-agent-core](dev/07-agent-core.md) → [08-models-providers](dev/08-models-providers.md) → 教程[接入自建模型端点](dev/14-walkthroughs/add-model-endpoint.md) |
 | 加业务工具 / 接内部系统 | [09-tools-sources-mcp](dev/09-tools-sources-mcp.md) → 教程[加一个业务工具](dev/14-walkthroughs/add-tool.md) |
 | 私有化部署 / 平台化 | [06-rpc](dev/06-rpc.md) → [12-build-deploy](dev/12-build-deploy.md) → [13-branding-decoupling](dev/13-branding-decoupling.md) |
+| 接飞书 / 企业 IM | [16-messaging](dev/16-messaging.md) → 官方文档的平台配置步骤 |
+| 查某个配置字段 | [18-config-reference](dev/18-config-reference.md) |
 
 ## 与其它文档的关系
 

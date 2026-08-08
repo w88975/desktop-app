@@ -145,15 +145,15 @@ Craft 维护了一套面向**最终用户**的在线文档：<https://agents.cra
 | Sources | 7 | [09-tools-sources-mcp](09-tools-sources-mcp.md)（代码结构，非接入操作） |
 | Skills | 1 | [09-tools-sources-mcp](09-tools-sources-mcp.md) |
 | Statuses / Labels / Automations | 5 | [10-sessions-data](10-sessions-data.md) |
-| Browser | 3 | ⚠️ 本套文档基本空白 |
-| Messaging | 4 | ⚠️ 仅 [02-repo-map](02-repo-map.md) 的适配器能力表 |
-| Customisation | 3 | ⚠️ 仅 [11-ui](11-ui.md) 主题一段 |
-| Go Further | 9 | 部分：deeplinks 见 [13](13-branding-decoupling.md)，tasks/workspaces 见 [10](10-sessions-data.md)；document-tools / rich-output / performance / kanban / sharing 空白 |
-| Reference | 8 | [08](08-models-providers.md) LLM 连接、[12](12-build-deploy.md) 环境变量；config 全量键 / credentials / network-proxy / preferences 未系统覆盖 |
+| Browser | 3 | [17-browser](17-browser.md) |
+| Messaging | 4 | [16-messaging](16-messaging.md) |
+| Customisation | 3 | [11-ui](11-ui.md) 外观定制一节 |
+| Go Further | 9 | deeplinks 见 [13](13-branding-decoupling.md)；tasks/workspaces/kanban 见 [10](10-sessions-data.md)；document-tools 见 [09](09-tools-sources-mcp.md)；performance 相关开关见 [18](18-config-reference.md)；rich-output / sharing 仍以官方文档为准 |
+| Reference | 8 | [18-config-reference](18-config-reference.md) 全量字段表；LLM 连接见 [08](08-models-providers.md)，服务端环境变量见 [12](12-build-deploy.md) |
 | Server | 2 | [12-build-deploy](12-build-deploy.md) |
 | API Reference | 1 | 示例占位，无内容 |
 
-标 ⚠️ 的分区，如果二次开发会碰到，建议先读官方文档理解产品行为，再回到代码。
+对照表列的是**代码侧**的对应位置。功能的**使用方法**一律以官方文档为准，本套文档不复述操作步骤。
 
 ## 下一步
 

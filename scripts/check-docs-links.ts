@@ -41,6 +41,8 @@ const KNOWN_ABSENT = new Set([
   'packages/craft-cli',
   // 刻意不存在：文档在说明「这个钩子文件缺失所以 pre-commit 不生效」
   '.husky/pre-commit',
+  // 刻意不存在：多处源码注释引用了它，但未随上游开源导出（见 17-browser）
+  'docs/adr-transport-locality.md',
 ])
 
 interface Finding {
