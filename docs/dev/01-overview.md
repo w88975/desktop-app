@@ -108,6 +108,53 @@ Electron 桌面应用、headless 服务端（可 Docker 部署）、浏览器 We
 | `packages/core/CLAUDE.md`、`packages/core/README.md` | ✅ 可信，篇幅小 |
 | `packages/server-core/README.md` | ⚠️ 只有 18 行，信息量极低 |
 
+## 官方在线文档
+
+Craft 维护了一套面向**最终用户**的在线文档：<https://agents.craft.do/docs>，共 13 个分区 44 页。全量索引在 <https://agents.craft.do/docs/llms.txt>（纯文本，适合直接喂给 AI 助手）。
+
+它与本套文档的关系：
+
+| | 官方在线文档 | `docs/dev/`（本套） |
+|---|---|---|
+| 视角 | **用户**：这个功能怎么用 | **开发者**：这段代码怎么组织、怎么改 |
+| 典型内容 | 「如何连接飞书机器人」的界面操作步骤 | 消息网关的适配器接口与三个实现的能力差异 |
+| 是否覆盖内部实现 | 否 | 是 |
+
+**两者互补，遇到「某个功能怎么用」优先查官方文档**，本套文档不复述用户操作步骤。
+
+### ⚠️ 官方文档描述的是「在售产品」，不等于我们 fork 的 v0.11.4
+
+这是使用官方文档时最需要警惕的一点 —— 官方文档跟随 Craft 的**发布版本**，而我们停在开源快照 v0.11.4，两者会漂移。
+
+已实测到的偏差（截至 2026-08）：
+
+| 官方文档中的内容 | v0.11.4 源码实测 |
+|---|---|
+| 环境变量 `CRAFT_ANTHROPIC_API_KEY` | ❌ **源码中不存在** |
+| 环境变量 `CRAFT_CLAUDE_OAUTH_TOKEN` | ❌ **源码中不存在** |
+| API Reference / OpenAPI 规范页 | ⚠️ 是 Mintlify 的示例占位（Plant Store 沙箱），**不是真实 API**，别去对接 |
+
+**判定方法**：官方文档里看到的任何键名、环境变量、字段，落地前先 `grep` 一遍我们的源码确认存在。
+
+### 官方文档分区速查
+
+| 分区 | 页数 | 本套文档的对应位置 |
+|---|---|---|
+| Getting Started | 2 | [03-getting-started](03-getting-started.md)（开发环境，非用户安装） |
+| Core Concepts | 5 | 术语表（本篇）、[09](09-tools-sources-mcp.md) 权限、[10](10-sessions-data.md) 数据模型 |
+| Sources | 7 | [09-tools-sources-mcp](09-tools-sources-mcp.md)（代码结构，非接入操作） |
+| Skills | 1 | [09-tools-sources-mcp](09-tools-sources-mcp.md) |
+| Statuses / Labels / Automations | 5 | [10-sessions-data](10-sessions-data.md) |
+| Browser | 3 | ⚠️ 本套文档基本空白 |
+| Messaging | 4 | ⚠️ 仅 [02-repo-map](02-repo-map.md) 的适配器能力表 |
+| Customisation | 3 | ⚠️ 仅 [11-ui](11-ui.md) 主题一段 |
+| Go Further | 9 | 部分：deeplinks 见 [13](13-branding-decoupling.md)，tasks/workspaces 见 [10](10-sessions-data.md)；document-tools / rich-output / performance / kanban / sharing 空白 |
+| Reference | 8 | [08](08-models-providers.md) LLM 连接、[12](12-build-deploy.md) 环境变量；config 全量键 / credentials / network-proxy / preferences 未系统覆盖 |
+| Server | 2 | [12-build-deploy](12-build-deploy.md) |
+| API Reference | 1 | 示例占位，无内容 |
+
+标 ⚠️ 的分区，如果二次开发会碰到，建议先读官方文档理解产品行为，再回到代码。
+
 ## 下一步
 
 - 想立刻跑起来 → [03-getting-started](03-getting-started.md)
