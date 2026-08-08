@@ -89,6 +89,7 @@
 | Task 标签错乱 | 假设了字面 id。slug 会撞名偏移，必须用解析函数 |
 | 自动化条件时灵时不灵 | 没走 `matcherMatches*` 适配器 |
 | 升级后老数据打不开 | 缺迁移。拿 `~/.craft-agent/config.json.bak-*` 对照 |
+| 整个 `~/.craft-agent` 拷到新电脑后所有连接都要重新授权 | 凭据密钥由硬件标识派生（macOS IOPlatformUUID / Windows MachineGuid / Linux machine-id），换机必然解不开。要换机无感应该用远程 workspace |
 
 ## UI
 

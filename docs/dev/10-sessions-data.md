@@ -216,7 +216,124 @@ Task 流程给每个任务的整个家族（orchestrator + 子任务）打一个
 
 `kanbanColumns` 一旦定义，就是该项目看板的**完整有序列**。`id` 是稳定 slug，删除后不复用；内置种子沿用 `todo` / `in-progress` / `done` 以便已有的卡片位置能存活。会话通过 `projectId` 绑定到 project。
 
-## 数据迁移
+## 数据可移植性：换电脑怎么办
+
+**先说结论：没有云同步服务。** 代码里没有任何自动同步、云备份或增量同步引擎，所有数据都在本地文件系统，不会有东西自动上云。
+
+想「换电脑数据还在」，只有四条路。
+
+### ⚠️ 最要紧的一条：直接拷贝 `~/.craft-agent` 到新机器，凭据会全废
+
+`credentials.enc` 用 **AES-256-GCM** 加密，密钥由**本机硬件标识**经 PBKDF2（10 万轮、SHA-256、32 字节 salt）派生 —— 见 `packages/shared/src/credentials/backends/secure-storage.ts`。
+
+| 平台 | 机器标识来源 |
+|---|---|
+| macOS | `IOPlatformUUID`（`ioreg` 读取，绑主板，永不变） |
+| Windows | 注册表 `HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid`（装系统时生成） |
+| Linux | `/var/lib/dbus/machine-id`，回退 `/etc/machine-id` |
+| 取不到时 | 回退到 `用户名:home目录` |
+
+文件格式：64 字节头（magic `CRAFT01\0` + flags + 32 字节 salt + 保留位）+ 加密载荷（12 字节 IV + 16 字节 GCM 认证标签 + 密文）。
+
+**换机器 = 换硬件标识 = 解不开。** 会话记录、skills、sources 配置都是明文 JSON，拷过去照常能读；但所有 API Key 与 OAuth token 读不出来，**必须重新授权**。
+
+> 顺带一提：这里有一次 v1 → v2 的自动迁移。老版本用 hostname 派生密钥（会随网络/DHCP 变化），新版改成硬件 UUID。首次加载时若新密钥解不开，会用 legacy 密钥再试一次，成功则**立即用新密钥重写**。所以从老版本升级不会丢凭据，但换机器仍然不行。
+
+### 路线 1 · 远程 workspace —— 唯一能做到「换机无感」的方案
+
+数据放在服务器上，本地只是前端。换电脑装上应用、填服务器地址 + token 就能继续。
+
+这是最接近「云服务」的答案，也是**如果目标是长期不丢数据、应该选的方案**。配置流程见 [12-build-deploy](12-build-deploy.md#桌面客户端怎么连远程服务端)。
+
+### 路线 2 · 会话导出/导入 —— `SessionBundle`
+
+信道 `sessions:export` / `sessions:import`，实现在 `packages/shared/src/sessions/bundle.ts`。
+
+```ts
+interface SessionBundle {
+  version: 1
+  session: {
+    header: SessionHeader        // 元信息
+    messages: StoredMessage[]    // 完整消息历史
+  }
+  files: BundleFile[]            // 会话目录下所有文件：attachments / plans / data / downloads
+  branchInfo?: BundleBranchInfo  // 仅 fork 时填充
+}
+```
+
+序列化时**跳过 `tmp/` 目录与点文件**，总大小校验上限 `MAX_BUNDLE_SIZE_BYTES = 100MB`（`packages/shared/src/utils/bundle-files.ts`），超了返回 `null`。
+
+### 路线 3 · 跨服务器转移会话
+
+信道 `sessions:exportRemoteTransfer` / `sessions:importRemoteTransfer`，两种模式（`DispatchMode`）：
+
+| 模式 | 行为 |
+|---|---|
+| `'move'` | 搬走 |
+| `'fork'` | 复制。额外带 `BundleBranchInfo`（`sdkSessionId` + `sdkTurnId` + `sdkCwd`），让目标服务器**在 SDK 层真正分叉**，forked 会话保有原会话的完整上下文 —— 而不只是复制了一份文字记录 |
+
+跨 workspace 转移时，目标会话的首轮会注入一次性的隐藏交接摘要作为上下文。
+
+### 路线 4 · 资源导出/导入 —— `ResourceBundle`
+
+信道 `resources:export` / `resources:import`，实现在 `packages/shared/src/resources/`。**这是迁移 skills 与 sources 的正解**：
+
+```ts
+interface ResourceBundle {
+  version: 1
+  exportedAt: number
+  sourceWorkspace?: string
+  resources: {
+    sources?: SourceBundleEntry[]        // 净化后的 config + guide.md + 图标等
+    skills?: SkillBundleEntry[]
+    automations?: AutomationBundleEntry[]  // webhook 鉴权已剥离
+  }
+}
+```
+
+- 导出可选 `'all'` 或指定 slug 列表；`automations` 还接受 `true`（等价 `'all'`）
+- 导入模式 `ResourceImportMode = 'skip' | 'overwrite'`
+- 导出返回 `ExportResult { bundle, warnings }` —— `warnings` 会告诉你跳过了什么、剥掉了哪些密钥、哪些路径不可移植
+- Source 条目里**不含 `config.json`**（配置单独放在 `config` 字段里，且已净化），其余非隐藏文件都带上
+
+> **凭据是刻意剥离的**（`config` 经过 sanitize，认证状态重置）。迁移后 source 需要重新授权 —— 这是安全设计，不是缺陷。
+
+### 大载荷传输
+
+上面几条路径的导入都可能超过 WebSocket 的单消息大小限制（Cloudflare、nginx 之类的反代会拦）。所以有一层分块传输协议（`packages/server-core/src/handlers/rpc/transfer.ts`）：
+
+```
+transfer:start   → 分配临时目录，返回 transferId
+transfer:chunk   → 逐块写入临时文件（重复 N 次）
+transfer:commit  → 重组、执行被推迟的那个 RPC、清理
+transfer:abort   → 客户端失败/取消后的尽力清理
+```
+
+TTL 5 分钟，带 checksum 校验。
+
+### 覆盖矩阵
+
+| 数据 | 有迁移机制吗 |
+|---|---|
+| 会话（含附件、plans、data、downloads） | ✅ `SessionBundle`、跨服务器转移 |
+| Skills | ✅ `ResourceBundle` |
+| Sources（配置与说明，不含凭据） | ✅ `ResourceBundle` |
+| Automations（webhook 鉴权剥离） | ✅ `ResourceBundle` |
+| **LLM 连接配置** | ❌ 不在任何 bundle 里，需手工重建 |
+| **凭据（API Key / OAuth token）** | ❌ 设计上不导出，且绑硬件标识 |
+| **Labels / Statuses / Views / Projects** | ❌ 无导出信道 |
+| **自动定时备份** | ❌ 只有 `config.json` 每日快照，保留最近 3 份（`MAX_CONFIG_BACKUPS`） |
+
+### 选型建议
+
+| 目标 | 该选什么 |
+|---|---|
+| 换电脑数据不丢 | **远程 workspace**。导出/导入是一次性搬家工具，不是持续可用方案 |
+| 把一套 skills/sources 分发给团队 | `ResourceBundle`（凭据本来就该各人自己配） |
+| 把某个会话交接给同事 | `SessionBundle` 或跨服务器转移的 `fork` |
+| 多台机器同时用、双向同步 | ❌ **当前架构不支持**。远程 workspace 是「数据在一处、客户端连过去」，不是多副本合并。要做得自己实现 |
+
+## 数据迁移（版本升级）
 
 配置结构变更走 `packages/shared/src/config/` 下的迁移机制（有 `storage-migrations` 与 `storage-startup-migration` 两组测试）。
 
@@ -239,3 +356,6 @@ Task 流程给每个任务的整个家族（orchestrator + 子任务）打一个
 | 新增的连接字段保存后丢失 | `updateLlmConnection` 的白名单（见 [08](08-models-providers.md)） |
 | 自动化条件时灵时不灵 | 没走 `matcherMatches*` 适配器 |
 | 升级后老数据打不开 | 缺迁移；拿 `config.json.bak-*` 对照 |
+| 拷贝 `~/.craft-agent` 到新机器后要求重新登录 | **设计如此** —— 凭据密钥绑硬件标识，见数据可移植性一节 |
+| 会话导出返回 null | 超过 100MB 上限（`MAX_BUNDLE_SIZE_BYTES`） |
+| 导入大 bundle 被反向代理拦断 | 走分块传输（`transfer:*`），不要一次性发 |

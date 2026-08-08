@@ -17,7 +17,7 @@
 | [07-agent-core](dev/07-agent-core.md) | 双后端架构、pi Agent、事件归一、一次对话的完整生命周期 | 碰 Agent 行为时 |
 | [08-models-providers](dev/08-models-providers.md) | LlmConnection、三个 providerType、Pi 模型目录、接新供应商的三条路 | 要接模型时 |
 | [09-tools-sources-mcp](dev/09-tools-sources-mcp.md) | 工具的三个来源、session 工具注册表、Source、MCP 代理、权限系统 | 要加工具或接外部系统时 |
-| [10-sessions-data](dev/10-sessions-data.md) | 目录全景、JSONL 持久化、Label/Status/View/Task/Automation 数据模型 | 碰持久化时 |
+| [10-sessions-data](dev/10-sessions-data.md) | 目录全景、JSONL 持久化、Label/Status/View/Task/Automation 数据模型、**数据可移植性与换机迁移** | 碰持久化或迁移时 |
 | [11-ui](dev/11-ui.md) | 渲染层结构、状态分层、event-processor、路由、设置页、i18n | 改 UI 时 |
 | [12-build-deploy](dev/12-build-deploy.md) | **三种可交付形态（桌面/网页/分享页）**、四条构建产线、打包签名、headless 部署、**客户端连远程服务端的两种模式**、Docker、自动更新、Sentry | 要发版或部署时 |
 | [13-branding-decoupling](dev/13-branding-decoupling.md) | Craft 强绑定点逐条清单 + 同步影响与数据兼容性评估 | 做换皮或私有化时 |
