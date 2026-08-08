@@ -95,3 +95,5 @@ cd packages/shared && bun test src/protocol              # 信道分类穷尽性
 cd apps/electron && bun test src/transport               # 路由行为
 bun run typecheck:all
 ```
+
+> 协议全貌、时序图、可靠投递与错误码见 `docs/dev/06-rpc.md`。

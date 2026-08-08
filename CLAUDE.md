@@ -1,6 +1,6 @@
 # aidp-desktop
 
-基于 [craft-agents-oss](https://github.com/lukilabs/craft-agents-oss) v0.11.4 的 Electron 桌面应用。
+基于 [craft-agents-oss](https://github.com/craft-ai-agents/craft-agents-oss) v0.11.4 的 Electron 桌面应用。
 Bun workspace 单仓，TypeScript + React 18 + Tailwind v4。
 
 ## 仓库地图
@@ -42,6 +42,8 @@ bun run electron:dev     # 首次会下载 uv 并构建 3 个子进程服务，�
 - `ui-components` — 组件放哪、shadcn 怎么加、playground 快速回路
 - `dev-workflow` — 构建、调试、提交前校验、日志与配置目录
 - `electron-ipc` — 新增 RPC 方法的 4 处改动与信道分类规则
+
+面向人的二次开发文档（架构、RPC、Agent 内核、术语表、上游同步约定）在 `docs/dev/`，索引见 `docs/README.md`。
 
 ## MCP
 

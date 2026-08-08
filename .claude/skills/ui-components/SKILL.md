@@ -75,3 +75,5 @@ bun run typecheck        # 实测可用
 改了 `packages/ui` 里的组件时，注意它同时影响 webui 和 viewer。
 
 `bun run lint` 整条链因 eslint 存量问题仍是红的，详见 `dev-workflow` skill。
+
+> 三端如何复用同一套组件、为什么分两个目录，见 `docs/dev/05-architecture.md`。

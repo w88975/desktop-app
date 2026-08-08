@@ -112,3 +112,5 @@ dev 版和正式版 `Craft Agents.app` 共用同一份数据：
 > **仍有 4 条无效条目**：`marketing:dev` / `marketing:build` / `marketing:preview`（`apps/marketing` 未随上游导出）和 `docs:dev`（`apps/online-docs` 未导出）。跑它们会报错，别用。
 
 渲染进程用 `chrome-devtools` MCP 或 Electron 自带 DevTools 调试。
+
+> 背景与原理（为什么是这套流程、门禁的真实状态）见 `docs/dev/03-getting-started.md` 与 `docs/dev/04-conventions.md`。
