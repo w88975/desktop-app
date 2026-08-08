@@ -4,6 +4,22 @@
 
 四条产线：桌面应用、headless 服务端、WebUI、Viewer。它们共享大量代码，但产出物与交付方式完全不同。
 
+## 三种可交付形态
+
+先回答最常被问到的问题：**这个项目能同时交付桌面应用和网页版吗？能，但两者不对称。**
+
+| 形态 | 怎么产出 | 用户拿到的是 | 需要常驻后端吗 |
+|---|---|---|---|
+| **桌面应用** | `electron:dist:mac` / `:win` / `:linux` | `.dmg`+`.zip` / NSIS `.exe` / AppImage | ❌ 服务端内嵌在主进程里 |
+| **网页版** | `webui:build` + 跑 `packages/server` | 一个网址 | ✅ **必须有** |
+| **只读分享页** | `viewer:build` | 静态站点 | ❌ 纯静态 |
+
+**网页版跑不成纯静态。** Agent 需要拉子进程（`pi-agent-server`、MCP 服务器、`claude` 二进制）、读写文件系统、管理凭据 —— 这些浏览器里都做不了。`apps/webui` 只是个前端壳，真正的运行时在服务端。
+
+> ⚠️ **桌面应用设置里的 Server Mode 不等于网页版。** 它只把 WS RPC 绑到 `0.0.0.0`，让**别的桌面客户端**连过来；主进程完全没有引用 `server-core/webui/`。要浏览器能访问，必须跑 `packages/server`。见 [05-architecture](05-architecture.md) 主进程一节。
+
+**网页版会缺一部分能力**：浏览器没有原生文件/文件夹对话框、窗口管理、`shell` 打开本地文件。`apps/webui/src/adapter/web-api.ts` 做了降级 —— 文件选择改用 `<input type=file>`，文件夹选择返回 `null`，`openFile` / `showInFolder` 是空操作。加新功能时的自检规则见 [06-rpc](06-rpc.md#第-5-处webui-可能需要一个-web-等价实现)。
+
 ## 构建产线全貌
 
 ```

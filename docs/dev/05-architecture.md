@@ -95,7 +95,11 @@ graph TB
 
 除了标准的 Electron 职责（窗口、菜单、托盘、深链、自动更新、通知、电源管理），它还额外承担：
 
-- **内嵌 WS RPC 服务端** —— 监听 `127.0.0.1` 随机端口；如果用户在设置里开了 Server Mode，改绑 `0.0.0.0` 并启用 token 鉴权，此时桌面应用本身就是一台服务器
+- **内嵌 WS RPC 服务端** —— 监听 `127.0.0.1` 随机端口；如果用户在设置里开了 Server Mode，改绑 `0.0.0.0` 并启用 token 鉴权，此时**别的桌面客户端**可以连过来用这台机器上的 workspace
+
+  > ⚠️ **Server Mode 不提供 WebUI。** 它只暴露 WS RPC，**主进程完全没有引用 `server-core/webui/` 的任何代码**（可以 `grep -n "webui" apps/electron/src/main/index.ts` 自行确认，结果是空的）。
+  >
+  > 想让浏览器访问必须跑 `packages/server` —— 只有它会 `createWebuiHandler()` 并在同端口上提供 HTTP。详见 [12-build-deploy](12-build-deploy.md) 的 WebUI 部署一节。
 - **Sentry 初始化** —— 在文件最顶部，早于其它 import，带凭据脱敏的 `beforeSend`
 - **shell 环境加载** —— `loadShellEnv()` 是整个文件的第一行执行代码，把用户 shell 里的 PATH（Homebrew、nvm 等）读进来，否则 Agent 调用的命令行工具会找不到
 - **主进程 i18n** —— 没有 localStorage，启动时从 `preferences.uiLanguage` 恢复语言
