@@ -150,6 +150,83 @@ bun run packages/server/src/index.ts --generate-token   # 生成一个随机 tok
 
 `scripts/docker-smoke-test.sh` 是现成的冒烟测试，改完 Dockerfile 后可以跑它验证。
 
+## 桌面客户端怎么连远程服务端
+
+有**两种模式**，用途不同，别搞混。
+
+### 模式 A · 按 workspace 连接（主流，全在界面里操作）
+
+一个客户端可以同时拥有本地 workspace 和远程 workspace，切换 workspace 时传输层自动换连接。
+
+**服务端侧**（提供方，可以是 headless server，也可以是另一台开了 Server Mode 的桌面应用）：
+
+- 桌面应用：设置 → **Server** 页，开启后配端口 / token / TLS 证书，**需要重启应用**（页面上有 `relaunchApp` 按钮）
+- headless server：本身就是服务端，启动时如果没给 token，会在控制台打印出来：
+  ```
+  CRAFT_SERVER_URL=ws://0.0.0.0:9100
+  CRAFT_SERVER_TOKEN=<自动生成的 token>
+  ```
+
+**客户端侧**：添加 workspace → 选「连接远程服务器」，走 `AddWorkspaceStep_ConnectRemote.tsx` 这个向导：
+
+1. 填服务端地址（`ws://192.168.1.100:9100` 或 `wss://...`）和 token
+2. 点测试 → 走 `remote:testConnection` 信道，建一次性连接完成握手，同时读回服务端版本号
+3. 握手成功后拉取远端 workspace 列表（`server:getWorkspaces`），选一个已有的，或在远端新建一个（`server:createWorkspace`）
+4. 确认后写入本地 workspace 记录的 `remoteServer` 字段（`workspaces:updateRemote`）
+
+存下来的就是这个结构（`packages/core/src/types/workspace.ts`）：
+
+```ts
+interface RemoteServerConfig {
+  url: string               // ws://host:port 或 wss://host:port
+  token: string             // 服务端的鉴权 token
+  remoteWorkspaceId: string // 该 workspace 在服务端上的 ID
+}
+```
+
+**运行时发生了什么**（`apps/electron/src/preload/bootstrap.ts`）：
+
+- preload 用同步 IPC 拿当前 workspace 的 `remoteServer` 配置
+- 有配置就额外建一个指向远端的 `WsRpcClient`，作为 `RoutedClient` 的 `workspaceClient`；没有就让 `workspaceClient` 等于本地 client
+- `RoutedClient` 按信道分类分流：LOCAL_ONLY → 本地，REMOTE_ELIGIBLE → 远端（见 [06-rpc](06-rpc.md)）
+- 因为本地和远端的 workspace ID 不同，`RoutedClient.setWorkspaceMapping()` 会在调用参数里把本地 ID 替换成远端 ID
+- 切换 workspace 时 `setClientFactory()` 造新连接，旧监听**先订新的再退旧的**（make-before-break），然后补发一次合成的重连事件，触发界面做过期状态刷新
+
+### 模式 B · 瘦客户端整机模式（环境变量）
+
+整个桌面应用作为一台远程服务器的前端，**不启动本地服务端**：
+
+```bash
+CRAFT_SERVER_URL=wss://203.0.113.5:9100 \
+CRAFT_SERVER_TOKEN=<token> \
+bun run electron:start
+```
+
+主进程里 `isClientOnly = !!process.env.CRAFT_SERVER_URL`，为真时整段服务端初始化被跳过。此时会话逻辑、工具执行、LLM 调用全部在远端跑，本机只负责渲染。
+
+适合：集中算力的部署、客户端机器不装模型凭据的场景。
+
+### 两种模式对比
+
+| | 模式 A 按 workspace | 模式 B 瘦客户端 |
+|---|---|---|
+| 配置方式 | 界面向导，持久化到 workspace | 启动时的环境变量 |
+| 本地服务端 | 照常启动 | 不启动 |
+| 能否混用本地 workspace | ✅ 可以 | ❌ 全部走远端 |
+| 适合 | 日常使用、部分 workspace 放服务器 | 集中式部署、瘦终端 |
+
+### ⚠️ 两个安全点
+
+**1. 远程连接默认不校验 TLS 证书。**
+`preload/bootstrap.ts` 和 `main/handlers/workspace.ts` 建远程 client 时都传了 `tlsRejectUnauthorized: false`（`WsRpcClient` 的默认值是 `true`，是这里显式关掉的）。好处是自签证书开箱可用，代价是 **`wss://` 在这条路径上挡不住中间人**。
+
+内网可控环境可以接受；如果要跨公网，应当改成校验证书并配置 CA（`CRAFT_RPC_TLS_CA`）。这是一处值得打 `[aidp]` 标记的加固点。
+
+**2. 模式 B 的证书放行范围是收敛的。**
+主进程注册了 `certificate-error` 处理器，但**只对 `CRAFT_SERVER_URL` 那一个 origin 放行**，其它连接照常走标准校验。实现上会把 `wss://` → `https://` 归一化后再比 origin（Electron 报错时统一用 https 方案）。这个设计是对的，别改宽。
+
+**没配 TLS 时 token 是明文传输的** —— 主进程启动时会打印警告并提示去 Settings → Server 配证书。
+
 ## WebUI 与 Viewer 部署
 
 **WebUI** 是静态资源 + 同端口的 HTTP 服务：

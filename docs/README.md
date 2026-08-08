@@ -19,7 +19,7 @@
 | [09-tools-sources-mcp](dev/09-tools-sources-mcp.md) | 工具的三个来源、session 工具注册表、Source、MCP 代理、权限系统 | 要加工具或接外部系统时 |
 | [10-sessions-data](dev/10-sessions-data.md) | 目录全景、JSONL 持久化、Label/Status/View/Task/Automation 数据模型 | 碰持久化时 |
 | [11-ui](dev/11-ui.md) | 渲染层结构、状态分层、event-processor、路由、设置页、i18n | 改 UI 时 |
-| [12-build-deploy](dev/12-build-deploy.md) | **三种可交付形态（桌面/网页/分享页）**、四条构建产线、打包签名、headless 部署、Docker、自动更新、Sentry | 要发版或部署时 |
+| [12-build-deploy](dev/12-build-deploy.md) | **三种可交付形态（桌面/网页/分享页）**、四条构建产线、打包签名、headless 部署、**客户端连远程服务端的两种模式**、Docker、自动更新、Sentry | 要发版或部署时 |
 | [13-branding-decoupling](dev/13-branding-decoupling.md) | Craft 强绑定点逐条清单 + 同步影响与数据兼容性评估 | 做换皮或私有化时 |
 | **教程** | [加一个设置项](dev/14-walkthroughs/add-setting.md) · [接入自建模型端点](dev/14-walkthroughs/add-model-endpoint.md) · [加一个业务工具](dev/14-walkthroughs/add-tool.md) | 从「读懂」到「能改」 |
 | [15-gotchas](dev/15-gotchas.md) | 踩坑集锦，按「症状 → 根因」组织 | 出问题时先查这里 |

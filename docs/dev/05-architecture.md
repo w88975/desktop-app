@@ -100,6 +100,8 @@ graph TB
   > ⚠️ **Server Mode 不提供 WebUI。** 它只暴露 WS RPC，**主进程完全没有引用 `server-core/webui/` 的任何代码**（可以 `grep -n "webui" apps/electron/src/main/index.ts` 自行确认，结果是空的）。
   >
   > 想让浏览器访问必须跑 `packages/server` —— 只有它会 `createWebuiHandler()` 并在同端口上提供 HTTP。详见 [12-build-deploy](12-build-deploy.md) 的 WebUI 部署一节。
+  >
+  > 别的桌面客户端**怎么连过来**（两种模式、配置流程、TLS 注意事项）见 [12-build-deploy](12-build-deploy.md#桌面客户端怎么连远程服务端)。
 - **Sentry 初始化** —— 在文件最顶部，早于其它 import，带凭据脱敏的 `beforeSend`
 - **shell 环境加载** —— `loadShellEnv()` 是整个文件的第一行执行代码，把用户 shell 里的 PATH（Homebrew、nvm 等）读进来，否则 Agent 调用的命令行工具会找不到
 - **主进程 i18n** —— 没有 localStorage，启动时从 `preferences.uiLanguage` 恢复语言
