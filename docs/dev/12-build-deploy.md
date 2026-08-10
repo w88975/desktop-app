@@ -229,18 +229,119 @@ bun run electron:start
 
 ## WebUI 与 Viewer 部署
 
-**WebUI** 是静态资源 + 同端口的 HTTP 服务：
+服务端侧的实现在 `packages/server-core/src/webui/`：`http-server.ts`（静态托管 + `/api/*`）、`auth.ts`（登录与 Cookie 会话）、`node-adapter.ts`。浏览器的 WebSocket 升级请求自动带上会话 Cookie，不需要 bearer token。
+
+### ⚠️ WebUI handler 的三个前置条件
+
+`/api/config`、`/api/auth`、`/login` 全部由 **webui handler** 提供，而它只在**同时满足**下面三条时才创建（`packages/server/src/index.ts`）：
+
+```ts
+const webuiEnabled = webuiDir && existsSync(webuiDir)   // ① 设了 CRAFT_WEBUI_DIR ② 且该目录真实存在
+if (webuiEnabled && serverToken) { ... }                 // ③ 且设了 CRAFT_SERVER_TOKEN
+```
+
+三条缺一，`/api/*` 就没人处理。**注意第 ② 条**：`CRAFT_WEBUI_DIR` 指向的目录必须已经构建出来，光设环境变量不够。
+
+`CRAFT_SERVER_TOKEN` 还有强度校验（`validateTokenEntropy`）：
+
+| 规则 | 结果 |
+|---|---|
+| 少于 16 字符 | ❌ 拒绝启动 |
+| 单字符重复（`aaaa…`） | ❌ 拒绝启动 |
+| 少于 8 个不同字符 | ⚠️ 警告但放行 |
+
+`bun run packages/server/src/index.ts --generate-token` 可以生成一个 48 位十六进制的合规 token。
+
+**登录口令** = `CRAFT_WEBUI_PASSWORD`，没设时回退到 `CRAFT_SERVER_TOKEN`。
+
+### 开发 WebUI：两条路
+
+#### 路线 A · 带 HMR（改 UI 时用这条，需要两个终端）
+
+**`webui:dev` 只启动前端。** 它跑一个 vite（5175），把 `/api`、`/login`、`/ws` **代理到 `127.0.0.1:9100`**（端口跟随 `CRAFT_RPC_PORT`）。后端必须自己起。
+
+终端 1 —— 后端：
 
 ```bash
-bun run webui:build                       # → apps/webui/dist/
-CRAFT_WEBUI_DIR=apps/webui/dist bun run packages/server/src/index.ts
-# 或一条命令：
+bun run webui:build      # 只为让 CRAFT_WEBUI_DIR 指向的目录存在，首次必须跑
+
+CRAFT_SERVER_TOKEN=dev-local-webui-token-2026 \
+CRAFT_WEBUI_DIR=apps/webui/dist \
+CRAFT_BUNDLED_ASSETS_ROOT=$PWD/apps/electron \
+bun run packages/server/src/index.ts
+```
+
+终端 2 —— 前端：
+
+```bash
+bun run webui:dev
+```
+
+浏览器开 **http://localhost:5175**，用上面那个 token 登录。页面由 vite 提供、有热更；`/api` 与 `/ws` 走代理打到 9100。
+
+启动成功时服务端会打印连接信息：
+
+```
+Craft Agent server listening on ws://127.0.0.1:9100
+CRAFT_SERVER_URL=ws://127.0.0.1:9100
+CRAFT_SERVER_TOKEN=<你的 token>
+CRAFT_WEBUI_URL=http://0.0.0.0:9100
+```
+
+> **`CRAFT_BUNDLED_ASSETS_ROOT` 建议带上** —— 指向 `apps/electron`，服务端从这里取内置资源（docs、themes、permissions、tool-icons）。不带也能起，但这些资源会缺。
+
+#### 路线 B · 一条命令，无 HMR
+
+```bash
 bun run server:prod
 ```
 
-服务端侧的实现在 `packages/server-core/src/webui/`：`http-server.ts`（静态托管）、`auth.ts`（登录与 Cookie 会话）、`node-adapter.ts`。浏览器的 WebSocket 升级请求自动带上会话 Cookie，不需要 bearer token。
+自动完成：构建子进程服务 → `webui:build` → 带 `CRAFT_WEBUI_DIR` 启动服务端。访问 **http://localhost:9100**。改代码要重新构建。
+
+### ⚠️ 单实例锁：桌面应用和服务端会抢
+
+服务端启动时会在 `$CONFIG_DIR/.server.lock` 取单实例锁。**如果 Electron 桌面应用正在跑，它已经持有这把锁**，服务端会拒绝启动：
+
+```
+Another server instance is already running (PID 9932).
+If this is stale, delete ~/.craft-agent/.server.lock and retry.
+To run a parallel instance (e.g. for dev), set CRAFT_CONFIG_DIR to a different path.
+```
+
+两个选择：
+
+| 做法 | 后果 |
+|---|---|
+| **退出桌面应用**，再起服务端 | WebUI 看到的是**你平时那份真实数据** |
+| 给服务端另设 `CRAFT_CONFIG_DIR` | 两者并存，但 WebUI 是**独立的空数据集**（没有 workspace、没有 LLM 连接，进去是引导流程） |
+
+并存的写法：
+
+```bash
+CRAFT_CONFIG_DIR=$HOME/.craft-agent-webui \
+CRAFT_SERVER_TOKEN=dev-local-webui-token-2026 \
+CRAFT_WEBUI_DIR=apps/webui/dist \
+CRAFT_BUNDLED_ASSETS_ROOT=$PWD/apps/electron \
+bun run packages/server/src/index.ts
+```
+
+> **锁文件里存了 `{pid, startedAt, execName}`**，会校验持有者进程是否真的存活。删锁之前先 `ps -p <PID>` 确认 —— 进程还活着就别删。
+
+### WebUI 排查
+
+| 现象 | 根因 |
+|---|---|
+| **`Failed to fetch config: 500`** | 后端没起。vite 代理连不上 `127.0.0.1:9100` 就返回 500。`lsof -nP -iTCP:9100 -sTCP:LISTEN` 确认 |
+| `/api/config` 返回 401 | **正常** —— 还没登录。先过 `/login` |
+| `/api/*` 返回 404 或落到 SPA | webui handler 没创建：`CRAFT_WEBUI_DIR` 没设、目录不存在、或 `CRAFT_SERVER_TOKEN` 没设 |
+| 服务端启动即退出，报 token too short | token 至少 16 字符 |
+| 服务端报 `Another server instance is already running` | Electron 应用持有锁；退出它或另设 `CRAFT_CONFIG_DIR` |
+| WebUI 里没有任何 workspace | 用了独立的 `CRAFT_CONFIG_DIR`，那是全新数据集 |
+| 代理端口不对 | vite 代理目标跟随 `CRAFT_RPC_PORT`（默认 9100），两边要一致 |
 
 **Viewer** 是纯静态页（`viewer:build` → `apps/viewer/dist/`），托管在任意静态服务器即可，不需要后端。
+
+
 
 ## 自动更新
 

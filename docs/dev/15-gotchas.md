@@ -31,6 +31,10 @@
 | Windows 打包报 EBUSY | bun / uv 必须走 `extraResources`，不能放 `files` |
 | 服务端启动报锁冲突 | 同一 `CRAFT_CONFIG_DIR` 已有实例在跑（单实例锁） |
 | dev 版改数据影响了正式版 | 两者共用 `~/.craft-agent/`。隔离方法：仓库目录名加数字后缀 |
+| WebUI 报 `Failed to fetch config: 500` | 后端没起。`webui:dev` 只有前端，代理目标 `127.0.0.1:9100` 无人监听 |
+| 服务端启动即退出，报 token too short | `CRAFT_SERVER_TOKEN` 至少 16 字符；`--generate-token` 可生成 |
+| 服务端报 `Another server instance is already running` | Electron 应用持有 `$CONFIG_DIR/.server.lock`。退出它，或给服务端另设 `CRAFT_CONFIG_DIR`（代价是独立的空数据集） |
+| 起了服务端但 `/api/*` 是 404 | webui handler 未创建：`CRAFT_WEBUI_DIR` 没设、**指向的目录不存在**、或 `CRAFT_SERVER_TOKEN` 没设 |
 
 ## RPC / 传输层
 

@@ -36,11 +36,13 @@ bun run electron:dev
 |---|---|---|---|
 | `bun run electron:dev` | 完整桌面应用 | 5173 | 改主进程、传输层、Agent、端到端验证 |
 | `bun run playground:dev` | 只有组件预览页，不启动 Electron | 5173 | **只改组件样式/交互时用这个**，秒级热更 |
-| `bun run webui:dev` | 浏览器端 UI | 5175 | 改 webui 适配层、验证浏览器兼容 |
+| `bun run webui:dev` | 浏览器端 UI（**只有前端**，需另起后端） | 5175 | 改 webui 适配层、验证浏览器兼容 |
 | `bun run viewer:dev` | 只读分享页 | 5174 | 改分享页 |
 | `bun run server:dev` | 只跑 headless 服务端 | 由环境变量决定 | 改服务端逻辑、调 RPC、测 CLI |
 
 > ⚠️ **`playground:dev` 与 `electron:dev` 抢 5173**，且前者启动时会 `kill -9` 占用者。不要同时跑。
+
+> ⚠️ **`webui:dev` 只启动前端。** 它把 `/api`、`/login`、`/ws` 代理到 `127.0.0.1:9100`，后端必须另开一个终端起。只跑 `webui:dev` 会在页面上看到 `Failed to fetch config: 500` —— 那是 vite 代理连不上目标。完整两终端流程见 [12-build-deploy](12-build-deploy.md#开发-webui两条路)。
 
 补充回路：
 
