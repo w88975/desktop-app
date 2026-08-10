@@ -12,7 +12,7 @@
 |---|---|---|
 | **pre-commit 钩子不生效** | `core.hooksPath` 指向 `.husky/_`，但 `.husky/pre-commit` 文件不存在，husky shim 直接 `exit 0` | `lint:i18n:staged`、`typecheck:staged` 不会自动跑 |
 | **CI 不生效** | `.github/workflows/*` 是 GitHub Actions，`origin` 是内网 GitLab；无 `.gitlab-ci.yml`；触发分支是 `main`，我们用 `master`/`develop` | 没有任何自动门禁 |
-| **`Dockerfile.server` 构建不过** | `COPY` 了三个不存在的路径：`packages/craft-agents-commands`、`packages/craft-cli`、`apps/marketing` | headless 服务端无法容器化 |
+| ~~`Dockerfile.server` 构建不过~~ | ✅ **已修复** —— 删掉了三行指向不存在包的 `COPY`（`packages/craft-agents-commands`、`packages/craft-cli`、`apps/marketing`），`[aidp]` 注释留在原位 | 上游同步时若这些包出现了，把三行加回来 |
 | **`CRAFT_CONFIG_DIR` 覆盖不彻底** | 至少 10 处代码直接 `join(homedir(), '.craft-agent', ...)` 绕过 `CONFIG_DIR` | 多实例开发时日志与窗口状态仍共用；改数据目录名会有遗漏 |
 | **`session-mcp-server` 疑似死代码** | 三处构建脚本都在构建它、`runtime-resolver` 也解析路径，但源码里找不到 spawn 它的调用点 | 无害但浪费构建时间；**不要贸然删**，打包脚本还指着它 |
 | **平台构建脚本依赖 Craft 私有密钥** | `apps/electron/scripts/build-{dmg.sh,linux.sh,win.ps1}` 开头调 1Password CLI 同步密钥，那是 Craft 的保险库 | 签名与 Sentry DSN 注入在我们这里会是空的，发版前需换成自己的密钥来源 |

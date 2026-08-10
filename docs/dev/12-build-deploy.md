@@ -136,19 +136,20 @@ bun run packages/server/src/index.ts --generate-token   # 生成一个随机 tok
 
 `Dockerfile.server`：`oven/bun:1.3-slim` 基础镜像，非 root 用户 `craftagents`，`EXPOSE 9100`，`ENTRYPOINT ["bun", "run", "packages/server/src/index.ts"]`，内置构建 webui 与子进程服务。
 
-> ⚠️ **`Dockerfile.server` 当前构建不过。** 它 `COPY` 了三个在本仓库中不存在的路径的 `package.json`：
+> ✅ **已修复（`[aidp]` 标记在 `Dockerfile.server`）。** 上游版本 `COPY` 了三个在本仓库中不存在的路径的 `package.json` —— `packages/craft-agents-commands`、`packages/craft-cli`、`apps/marketing`。它们存在于上游私有仓库但未随开源导出，Docker 的 `COPY` 源不存在会直接失败，镜像根本构建不过。
 >
-> ```
-> packages/craft-agents-commands/    ❌ 不存在
-> packages/craft-cli/                ❌ 不存在
-> apps/marketing/                    ❌ 不存在
-> ```
+> 已删除这三行，并在原位留了 `[aidp]` 注释说明原因。删除前确认过 `bun.lock` 与后续构建步骤都不引用它们（`bun.lock` 里的 `"craft-cli"` 是 `apps/cli` 的 bin 名，不是工作区包）。
 >
-> 这些是上游私有仓库里有、但没随开源导出的包。Docker 的 `COPY` 源不存在会直接失败。
->
-> **修法**：删掉这三行 `COPY`。删之前确认后续步骤没有引用它们（实测没有）。这是个需要打 `[aidp]` 标记的上游文件修改。
+> **上游同步时**：若上游某天补上这些包，把这三行加回来即可 —— 注释里写了。
 
-`scripts/docker-smoke-test.sh` 是现成的冒烟测试，改完 Dockerfile 后可以跑它验证。
+验证：
+
+```bash
+docker buildx build -f Dockerfile.server -t aidp-server .
+bash scripts/docker-smoke-test.sh aidp-server
+```
+
+冒烟测试会拉起容器、等服务就绪、再用 CLI 跑 `--validate-server`，退出时自动清理。
 
 ## 桌面客户端怎么连远程服务端
 

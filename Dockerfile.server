@@ -60,14 +60,16 @@ COPY packages/core/package.json packages/core/
 COPY packages/session-tools-core/package.json packages/session-tools-core/
 COPY packages/session-mcp-server/package.json packages/session-mcp-server/
 COPY packages/pi-agent-server/package.json packages/pi-agent-server/
-COPY packages/craft-agents-commands/package.json packages/craft-agents-commands/
-COPY packages/craft-cli/package.json packages/craft-cli/
+# [aidp] 此处删除了三行 COPY：packages/craft-agents-commands、packages/craft-cli、
+# apps/marketing。这三个包存在于上游私有仓库，但未随开源导出；Docker 的 COPY 源不
+# 存在会直接失败，导致镜像根本构建不过。已确认 bun.lock 与后续构建步骤都不引用它们
+# （bun.lock 里的 "craft-cli" 是 apps/cli 的 bin 名，不是工作区包）。
+# 上游若某天补上这些包，同步时把这三行加回来即可。
 COPY packages/ui/package.json packages/ui/
 COPY packages/messaging-gateway/package.json packages/messaging-gateway/
 COPY packages/messaging-whatsapp-worker/package.json packages/messaging-whatsapp-worker/
 COPY apps/electron/package.json apps/electron/
 COPY apps/cli/package.json apps/cli/
-COPY apps/marketing/package.json apps/marketing/
 COPY apps/viewer/package.json apps/viewer/
 COPY apps/webui/package.json apps/webui/
 
