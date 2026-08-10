@@ -267,9 +267,12 @@ bun run webui:build      # 只为让 CRAFT_WEBUI_DIR 指向的目录存在，首
 
 CRAFT_SERVER_TOKEN=dev-local-webui-token-2026 \
 CRAFT_WEBUI_DIR=apps/webui/dist \
+CRAFT_WEBUI_WS_URL=ws://localhost:9100 \
 CRAFT_BUNDLED_ASSETS_ROOT=$PWD/apps/electron \
 bun run packages/server/src/index.ts
 ```
+
+> **`CRAFT_WEBUI_WS_URL` 在 vite 代理下是必需的**，不加会出现「登录后仍显示引导界面」。原因见下一节。
 
 终端 2 —— 前端：
 
@@ -297,6 +300,56 @@ bun run server:prod
 ```
 
 自动完成：构建子进程服务 → `webui:build` → 带 `CRAFT_WEBUI_DIR` 启动服务端。访问 **http://localhost:9100**。改代码要重新构建。
+
+### ⚠️ vite 代理下必须显式指定 `CRAFT_WEBUI_WS_URL`
+
+**症状**：登录成功，但页面显示「欢迎使用 / 选择连接方式」的引导界面，让你重新配模型 —— 哪怕服务端日志明明已经加载了 workspace 和 LLM 连接。
+
+**这是个误导性表象。** 真实错误在浏览器控制台：
+
+```
+Failed to check auth state: Error: Token required
+```
+
+完整因果链：
+
+```
+vite 代理 /api 时带 changeOrigin: true
+   → 把 Host 头改写成 127.0.0.1:9100
+   ▼
+服务端 resolveWebSocketUrl() 依据 Host 头推导
+   → 返回 wsUrl = ws://127.0.0.1:9100
+   ▼
+页面在 http://localhost:5175，登录 Cookie 作用域是主机名 localhost
+   → 浏览器直连 ws://127.0.0.1:9100 时不发送 Cookie
+     （Cookie 按主机名隔离，127.0.0.1 与 localhost 是两个不同主机名；端口不影响）
+   ▼
+服务端收不到凭证 → 拒绝握手 "Token required"
+   ▼
+渲染进程 App.tsx 的 initialize() 抛错 → 落进 catch → setAppState('onboarding')
+```
+
+最后一步是关键 —— `App.tsx` 的初始化有这么一段兜底：
+
+```ts
+} catch (error) {
+  console.error('Failed to check auth state:', error)
+  // If check fails, show onboarding to be safe
+  setAppState('onboarding')
+}
+```
+
+**任何一步初始化失败都会显示引导界面。** 所以「让我配模型」几乎从不是真正的问题，先去控制台看真实报错。
+
+**修法**：让服务端返回与页面同主机名的 wsUrl。
+
+```bash
+CRAFT_WEBUI_WS_URL=ws://localhost:9100
+```
+
+`resolveWebSocketUrl()` 的优先级是：`CRAFT_WEBUI_WS_URL` > 请求 Host 头推导 > 兜底 `127.0.0.1`。显式指定就绕开了 Host 头推导。
+
+> **通用规则：`wsUrl` 的主机名必须与浏览器地址栏的主机名逐字一致。** 反向代理、Docker、跨机访问都要注意这一条 —— 这也正是 `CRAFT_WEBUI_WS_URL` 存在的意义（`packages/server/src/index.ts` 的注释写的是 "optional browser-facing ws:// or wss:// URL"）。
 
 ### ⚠️ 单实例锁：桌面应用和服务端会抢
 
@@ -336,6 +389,8 @@ bun run packages/server/src/index.ts
 | `/api/*` 返回 404 或落到 SPA | webui handler 没创建：`CRAFT_WEBUI_DIR` 没设、目录不存在、或 `CRAFT_SERVER_TOKEN` 没设 |
 | 服务端启动即退出，报 token too short | token 至少 16 字符 |
 | 服务端报 `Another server instance is already running` | Electron 应用持有锁；退出它或另设 `CRAFT_CONFIG_DIR` |
+| **登录后仍显示引导界面（让你配模型）** | 多半不是真的缺配置。看控制台：`Token required` → `wsUrl` 主机名与页面不一致，设 `CRAFT_WEBUI_WS_URL` |
+| 控制台报 `Token required` | WS 握手没带上会话 Cookie。检查 `/api/config` 返回的 `wsUrl` 主机名 |
 | WebUI 里没有任何 workspace | 用了独立的 `CRAFT_CONFIG_DIR`，那是全新数据集 |
 | 代理端口不对 | vite 代理目标跟随 `CRAFT_RPC_PORT`（默认 9100），两边要一致 |
 

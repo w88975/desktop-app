@@ -42,7 +42,7 @@ bun run electron:dev
 
 > ⚠️ **`playground:dev` 与 `electron:dev` 抢 5173**，且前者启动时会 `kill -9` 占用者。不要同时跑。
 
-> ⚠️ **`webui:dev` 只启动前端。** 它把 `/api`、`/login`、`/ws` 代理到 `127.0.0.1:9100`，后端必须另开一个终端起。只跑 `webui:dev` 会在页面上看到 `Failed to fetch config: 500` —— 那是 vite 代理连不上目标。完整两终端流程见 [12-build-deploy](12-build-deploy.md#开发-webui两条路)。
+> ⚠️ **`webui:dev` 只启动前端。** 它把 `/api`、`/login`、`/ws` 代理到 `127.0.0.1:9100`，后端必须另开一个终端起。只跑 `webui:dev` 会在页面上看到 `Failed to fetch config: 500` —— 那是 vite 代理连不上目标。后端还必须带 `CRAFT_WEBUI_WS_URL=ws://localhost:9100`，否则会「登录后仍显示引导界面」。完整两终端流程见 [12-build-deploy](12-build-deploy.md#开发-webui两条路)。
 
 补充回路：
 

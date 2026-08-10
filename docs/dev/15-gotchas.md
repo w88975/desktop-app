@@ -35,6 +35,8 @@
 | 服务端启动即退出，报 token too short | `CRAFT_SERVER_TOKEN` 至少 16 字符；`--generate-token` 可生成 |
 | 服务端报 `Another server instance is already running` | Electron 应用持有 `$CONFIG_DIR/.server.lock`。退出它，或给服务端另设 `CRAFT_CONFIG_DIR`（代价是独立的空数据集） |
 | 起了服务端但 `/api/*` 是 404 | webui handler 未创建：`CRAFT_WEBUI_DIR` 没设、**指向的目录不存在**、或 `CRAFT_SERVER_TOKEN` 没设 |
+| **WebUI 登录后仍显示引导界面（让你配模型）** | 通常不是真的缺配置 —— `App.tsx` 初始化**任何一步抛错都会 fallback 到引导**。先看控制台真实报错 |
+| 控制台报 `Token required` | WS 握手没带会话 Cookie。vite 代理的 `changeOrigin: true` 让服务端推出 `ws://127.0.0.1:9100`，而页面在 `localhost` —— **Cookie 按主机名隔离**。设 `CRAFT_WEBUI_WS_URL=ws://localhost:9100` |
 
 ## RPC / 传输层
 
