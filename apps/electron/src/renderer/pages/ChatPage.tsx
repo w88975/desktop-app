@@ -8,7 +8,7 @@
 import * as React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { AlertCircle, Globe, Copy, RefreshCw, Link2Off, Info, Pencil } from 'lucide-react'
+import { AlertCircle, Globe, Copy, RefreshCw, Link2Off, Info, Pencil, Maximize2, PanelRight } from 'lucide-react'
 import { ChatDisplay, type ChatDisplayHandle } from '@/components/app-shell/ChatDisplay'
 import { PanelHeader } from '@/components/app-shell/PanelHeader'
 import { SessionMenu } from '@/components/app-shell/SessionMenu'
@@ -30,6 +30,7 @@ import { kanbanEditorTargetAtom } from '@/atoms/kanban'
 import { getSessionTitle } from '@/utils/session'
 // Model resolution: connection.defaultModel (no hardcoded defaults)
 import { resolveEffectiveConnectionSlug, isSessionConnectionUnavailable } from '@config/llm-connections'
+import { useAgentPresentation } from '@/context/AgentPresentationContext'
 
 export interface ChatPageProps {
   sessionId: string
@@ -37,6 +38,7 @@ export interface ChatPageProps {
 
 const ChatPage = React.memo(function ChatPage({ sessionId }: ChatPageProps) {
   const { t } = useTranslation()
+  const { isPanel, toggleMode } = useAgentPresentation()
   // Diagnostic: mark when component runs
   React.useLayoutEffect(() => {
     rendererPerf.markSessionSwitch(sessionId, 'panel.mounted')
@@ -638,7 +640,15 @@ const ChatPage = React.memo(function ChatPage({ sessionId }: ChatPageProps) {
     )
   }, [isTaskOrchestrator, handleEditTask, t])
 
-  const primaryHeaderAction = isCompactMode ? compactInfoButton : shareButton
+  const modeToggleButton = React.useMemo(() => (
+    <PanelHeaderCenterButton
+      icon={isPanel ? <Maximize2 className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
+      tooltip={isPanel ? 'Open Agent full view' : 'Dock Agent as panel'}
+      onClick={() => { void toggleMode() }}
+    />
+  ), [isPanel, toggleMode])
+
+  const primaryHeaderAction = modeToggleButton
   const headerActions = editTaskButton ? (
     <div className="flex items-center gap-1.5">
       {editTaskButton}

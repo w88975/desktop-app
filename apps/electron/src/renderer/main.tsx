@@ -12,6 +12,7 @@ import { setupI18n, i18n } from '@craft-agent/shared/i18n'
 import { initReactI18next } from 'react-i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
 import './index.css'
+import { AgentPresentationProvider } from './context/AgentPresentationContext'
 
 // Initialize i18n before any React rendering
 setupI18n([LanguageDetector, initReactI18next])
@@ -130,7 +131,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <Sentry.ErrorBoundary fallback={<CrashFallback />}>
       <JotaiProvider>
-        <Root />
+        <AgentPresentationProvider>
+          <Root />
+        </AgentPresentationProvider>
       </JotaiProvider>
     </Sentry.ErrorBoundary>
   </React.StrictMode>

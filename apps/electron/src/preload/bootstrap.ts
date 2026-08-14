@@ -37,6 +37,12 @@ import type { ConfirmDialogSpec, FileDialogSpec, BrowserCapabilityRequest } from
 import type { RpcClient } from '@craft-agent/server-core/transport'
 import type { RemoteServerConfig } from '@craft-agent/core/types'
 import type { ElectronAPI } from '../shared/types'
+import {
+  APP_PLATFORM_CHANNELS,
+  type AgentPresentationState,
+  type AgentShellCommand,
+  type ShellState,
+} from '../shared/app-platform'
 
 // ---------------------------------------------------------------------------
 // Client interface — common surface for both RoutedClient and WsRpcClient
@@ -409,6 +415,25 @@ client.onConnectionStateChanged((state) => {
     callbackServer?.close()
   }
 }
+
+// App lifecycle — direct IPC (not WS RPC) since it restarts the server itself
+;(api as ElectronAPI).getAgentPresentationState = async () => {
+  const state = await ipcRenderer.invoke(APP_PLATFORM_CHANNELS.GET_STATE) as ShellState
+  return state.agent
+}
+;(api as ElectronAPI).onAgentPresentationChanged = (callback: (state: AgentPresentationState) => void) => {
+  const handler = (_event: Electron.IpcRendererEvent, state: AgentPresentationState) => callback(state)
+  ipcRenderer.on(APP_PLATFORM_CHANNELS.AGENT_PRESENTATION_CHANGED, handler)
+  return () => ipcRenderer.removeListener(APP_PLATFORM_CHANNELS.AGENT_PRESENTATION_CHANGED, handler)
+}
+;(api as ElectronAPI).toggleAgentPresentationMode = () => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.TOGGLE_AGENT_MODE)
+;(api as ElectronAPI).closeAgentPanel = () => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.CLOSE_AGENT_PANEL)
+;(api as ElectronAPI).onAgentShellCommand = (callback: (command: AgentShellCommand) => void) => {
+  const handler = (_event: Electron.IpcRendererEvent, command: AgentShellCommand) => callback(command)
+  ipcRenderer.on(APP_PLATFORM_CHANNELS.AGENT_COMMAND_RECEIVED, handler)
+  return () => ipcRenderer.removeListener(APP_PLATFORM_CHANNELS.AGENT_COMMAND_RECEIVED, handler)
+}
+;(api as ElectronAPI).notifyAgentRendererReady = () => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.AGENT_RENDERER_READY)
 
 // App lifecycle — direct IPC (not WS RPC) since it restarts the server itself
 ;(api as ElectronAPI).relaunchApp = () => ipcRenderer.invoke('app:relaunch')

@@ -28,6 +28,12 @@ type ApiToChannelMapKeys = Exclude<
   | 'onTransferProgress' // direct IPC listener — chunk upload progress
   | 'changeLanguage' // direct IPC to main process — syncs i18n language
   | 'getFilePath' // renderer-local — webUtils.getPathForFile, no IPC round-trip
+  | 'getAgentPresentationState' // direct app-platform IPC
+  | 'onAgentPresentationChanged' // direct app-platform IPC listener
+  | 'toggleAgentPresentationMode' // direct app-platform IPC
+  | 'closeAgentPanel' // direct app-platform IPC
+  | 'onAgentShellCommand' // direct app-platform IPC listener
+  | 'notifyAgentRendererReady' // direct app-platform IPC
 > | BrowserPaneKeys
 type ChannelMapKeys = keyof typeof CHANNEL_MAP & string
 

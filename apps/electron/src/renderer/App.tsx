@@ -2073,7 +2073,6 @@ export default function App() {
           {/* Main UI - always rendered, splash fades away to reveal it */}
           <div
             className="h-full flex flex-col text-foreground"
-            style={{ paddingTop: 'var(--topbar-height)' }}
           >
             {showTransportConnectionBanner && connectionState && (
               <TransportConnectionBanner

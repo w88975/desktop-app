@@ -46,6 +46,128 @@ import { KanbanBoardContainer } from './kanban/KanbanBoardContainer'
 import type { ExecutionEntry } from '../automations/types'
 import { automationsAtom } from '@/atoms/automations'
 import { SendResourceToWorkspaceDialog, type SendResourceType } from './SendResourceToWorkspaceDialog'
+import { PanelHeader } from './PanelHeader'
+import { PanelHeaderCenterButton } from '@/components/ui/PanelHeaderCenterButton'
+import { Maximize2 } from 'lucide-react'
+import { useAgentPresentation } from '@/context/AgentPresentationContext'
+import { navigate, routes } from '@/lib/navigate'
+import { ChatInputZone } from './input/ChatInputZone'
+import { DEFAULT_MODEL } from '@config/models'
+import type { FileAttachment, PermissionMode } from '../../../shared/types'
+
+function AgentNewConversationState() {
+  const { toggleMode } = useAgentPresentation()
+  const {
+    rightSidebarButton,
+    activeWorkspaceId,
+    llmConnections,
+    workspaceDefaultLlmConnection,
+    enabledModes,
+    enabledSources,
+    skills,
+    labels,
+    sessionStatuses,
+    onCreateSession,
+    onSendMessage,
+    onSessionSourcesChange,
+  } = useAppShellContext()
+  const [input, setInput] = useState('')
+  const [attachments, setAttachments] = useState<FileAttachment[]>([])
+  const [model, setModel] = useState(DEFAULT_MODEL)
+  const [connection, setConnection] = useState(workspaceDefaultLlmConnection)
+  const [permissionMode, setPermissionMode] = useState<PermissionMode>('ask')
+  const [enabledSourceSlugs, setEnabledSourceSlugs] = useState<string[]>([])
+  const [sessionLabels, setSessionLabels] = useState<string[]>([])
+  const [sessionStatus, setSessionStatus] = useState('todo')
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (!workspaceDefaultLlmConnection) return
+    setConnection(workspaceDefaultLlmConnection)
+    const defaultConnection = llmConnections.find(item => item.slug === workspaceDefaultLlmConnection)
+    if (defaultConnection?.defaultModel) setModel(defaultConnection.defaultModel)
+  }, [workspaceDefaultLlmConnection, llmConnections])
+
+  const submit = async (message: string, submittedAttachments?: FileAttachment[], skillSlugs?: string[]) => {
+    const trimmed = message.trim()
+    if (!trimmed || !activeWorkspaceId || submitting) return
+    setSubmitting(true)
+    try {
+      const session = await onCreateSession(activeWorkspaceId, {
+        model,
+        llmConnection: connection,
+        permissionMode,
+        labels: sessionLabels,
+        sessionStatus,
+      })
+      if (enabledSourceSlugs.length > 0) {
+        onSessionSourcesChange?.(session.id, enabledSourceSlugs)
+      }
+      navigate(routes.view.allSessions(session.id))
+      onSendMessage(session.id, trimmed, submittedAttachments, skillSlugs)
+      setInput('')
+      setAttachments([])
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="h-full flex flex-col">
+      <PanelHeader
+        title="New Conversation"
+        actions={(
+          <PanelHeaderCenterButton
+            icon={<Maximize2 className="h-4 w-4" />}
+            tooltip="Open Agent full view"
+            onClick={() => { void toggleMode() }}
+          />
+        )}
+        rightSidebarButton={rightSidebarButton}
+      />
+      <div className="flex-1 min-h-0" />
+      <ChatInputZone
+        compactMode={false}
+        permissionMode={permissionMode}
+        onPermissionModeChange={setPermissionMode}
+        sessionId="agent-new-conversation"
+        sessionLabels={sessionLabels}
+        labels={labels}
+        onLabelsChange={setSessionLabels}
+        sessionStatuses={sessionStatuses}
+        currentSessionStatus={sessionStatus}
+        onSessionStatusChange={setSessionStatus}
+        inputProps={{
+          disabled: submitting || !activeWorkspaceId,
+          isProcessing: submitting,
+          onSubmit: submit,
+          currentModel: model,
+          onModelChange: (nextModel, nextConnection) => {
+            setModel(nextModel)
+            if (nextConnection) setConnection(nextConnection)
+          },
+          currentConnection: connection,
+          onConnectionChange: nextConnection => {
+            setConnection(nextConnection)
+            const selected = llmConnections.find(item => item.slug === nextConnection)
+            if (selected?.defaultModel) setModel(selected.defaultModel)
+          },
+          enabledModes,
+          inputValue: input,
+          onInputChange: setInput,
+          attachmentsValue: attachments,
+          onAttachmentsChange: setAttachments,
+          sources: enabledSources,
+          enabledSourceSlugs,
+          onSourcesChange: setEnabledSourceSlugs,
+          skills,
+          workspaceId: activeWorkspaceId ?? undefined,
+          isEmptySession: true,
+        }}
+      />
+    </div>
+  )
+}
 
 export interface MainContentPanelProps {
   /** Whether both sidebar and navigator are hidden (focus mode / CMD+.) */
@@ -66,6 +188,7 @@ export function MainContentPanel({
   navStateOverride,
 }: MainContentPanelProps) {
   const { t } = useTranslation()
+  const { isPanel } = useAgentPresentation()
   const globalNavState = useNavigationState()
   const navState = navStateOverride ?? globalNavState
   const {
@@ -415,6 +538,13 @@ export function MainContentPanel({
       )
     }
     // No session selected - empty state
+    if (isPanel) {
+      return wrapWithStoplight(
+        <Panel variant="grow" className={className}>
+          <AgentNewConversationState />
+        </Panel>
+      )
+    }
     return wrapWithStoplight(
       <Panel variant="grow" className={className}>
         <div className="flex items-center justify-center h-full text-muted-foreground">

@@ -149,12 +149,8 @@ export async function rebuildMenu(): Promise<void> {
               click: (_menuItem: Electron.MenuItem, window: Electron.BaseWindow | undefined) => {
                 const browserWindow = window instanceof BrowserWindow ? window : BrowserWindow.getFocusedWindow()
                 if (!browserWindow) return
-                const views = browserWindow.getBrowserViews()
-                if (views.length > 0) {
-                  views[0].webContents.reload()
-                } else {
-                  browserWindow.webContents.reload()
-                }
+                const agent = windowManager.getShellViewManager(browserWindow.webContents.id)?.getAgentWebContents()
+                ;(agent ?? browserWindow.webContents).reload()
               }
             },
             {
@@ -163,12 +159,8 @@ export async function rebuildMenu(): Promise<void> {
               click: (_menuItem: Electron.MenuItem, window: Electron.BaseWindow | undefined) => {
                 const browserWindow = window instanceof BrowserWindow ? window : BrowserWindow.getFocusedWindow()
                 if (!browserWindow) return
-                const views = browserWindow.getBrowserViews()
-                if (views.length > 0) {
-                  views[0].webContents.reloadIgnoringCache()
-                } else {
-                  browserWindow.webContents.reloadIgnoringCache()
-                }
+                const agent = windowManager.getShellViewManager(browserWindow.webContents.id)?.getAgentWebContents()
+                ;(agent ?? browserWindow.webContents).reloadIgnoringCache()
               }
             },
           ] : []),
@@ -260,7 +252,8 @@ function sendToRenderer(channel: MenuBroadcastChannel): void {
   if (!cachedEventSink || !cachedClientResolver) return
   const win = BrowserWindow.getFocusedWindow()
   if (win && !win.isDestroyed() && !win.webContents.isDestroyed()) {
-    const clientId = cachedClientResolver(win.webContents.id)
+    const agentId = cachedWindowManager?.getShellViewManager(win.webContents.id)?.getAgentWebContentsId()
+    const clientId = cachedClientResolver(agentId ?? win.webContents.id)
     if (clientId) {
       cachedEventSink(channel, { to: 'client', clientId })
     }

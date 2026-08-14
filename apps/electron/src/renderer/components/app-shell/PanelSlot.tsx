@@ -24,6 +24,7 @@ import { useAppShellContext, AppShellProvider } from '@/context/AppShellContext'
 import { PanelHeaderCenterButton } from '@/components/ui/PanelHeaderCenterButton'
 import { MainContentPanel } from './MainContentPanel'
 import { PANEL_MIN_WIDTH, RADIUS_EDGE, RADIUS_INNER } from './panel-constants'
+import { useAgentPresentation } from '@/context/AgentPresentationContext'
 
 interface PanelSlotProps {
   entry: PanelStackEntry
@@ -59,10 +60,12 @@ export function PanelSlot({
   const setFocusedPanel = useSetAtom(focusedPanelIdAtom)
   const parentContext = useAppShellContext()
   const navState = parseRouteToNavigationState(entry.route)
+  const { isPanel, closePanel: closeAgentPanel } = useAgentPresentation()
 
   const handleClose = useCallback(() => {
-    closePanel(entry.id)
-  }, [closePanel, entry.id])
+    if (isPanel) void closeAgentPanel()
+    else closePanel(entry.id)
+  }, [isPanel, closeAgentPanel, closePanel, entry.id])
 
   // Build close button for PanelHeader (via context override)
   const closeButton = useMemo(() => {

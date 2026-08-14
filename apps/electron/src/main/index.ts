@@ -4,6 +4,7 @@ import { loadShellEnv } from './shell-env'
 loadShellEnv()
 
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, nativeTheme, shell } from 'electron'
+import { APP_PLATFORM_CHANNELS, type AgentShellCommand } from '../shared/app-platform'
 import { createHash, randomUUID } from 'crypto'
 import { hostname, homedir } from 'os'
 import * as Sentry from '@sentry/electron/main'
@@ -497,6 +498,53 @@ app.whenReady().then(async () => {
     ipcMain.on('__get-workspace-id', (e) => {
       e.returnValue = windowManager?.getWorkspaceForWindow(e.sender.id) ?? ''
     })
+
+    const getShellViews = (senderId: number, allowedKinds: Array<'shell' | 'agent'>) => {
+      const surface = windowManager?.getSurfaceRegistration(senderId)
+      if (!surface || !allowedKinds.includes(surface.kind as 'shell' | 'agent')) {
+        throw new Error(`Surface ${senderId} cannot use app-platform control IPC`)
+      }
+      const manager = windowManager?.getShellViewManager(senderId)
+      if (!manager) throw new Error(`No shell view manager for surface ${senderId}`)
+      return manager
+    }
+
+    ipcMain.handle(APP_PLATFORM_CHANNELS.GET_STATE, event =>
+      getShellViews(event.sender.id, ['shell', 'agent']).getState()
+    )
+    ipcMain.handle(APP_PLATFORM_CHANNELS.GET_WEBVIEW_BOOTSTRAP, event =>
+      getShellViews(event.sender.id, ['shell']).getWebviewBootstrap()
+    )
+    ipcMain.handle(APP_PLATFORM_CHANNELS.ACTIVATE_HOME, event =>
+      getShellViews(event.sender.id, ['shell']).activateHome()
+    )
+    ipcMain.handle(APP_PLATFORM_CHANNELS.OPEN_APP, (event, appId: string) =>
+      getShellViews(event.sender.id, ['shell']).openApp(appId)
+    )
+    ipcMain.handle(APP_PLATFORM_CHANNELS.ACTIVATE_TAB, (event, tabId: string) =>
+      getShellViews(event.sender.id, ['shell']).activateTab(tabId)
+    )
+    ipcMain.handle(APP_PLATFORM_CHANNELS.CLOSE_TAB, (event, tabId: string) =>
+      getShellViews(event.sender.id, ['shell']).closeTab(tabId)
+    )
+    ipcMain.handle(APP_PLATFORM_CHANNELS.TOGGLE_AGENT, event =>
+      getShellViews(event.sender.id, ['shell']).toggleAgent()
+    )
+    ipcMain.handle(APP_PLATFORM_CHANNELS.TOGGLE_AGENT_MODE, event =>
+      getShellViews(event.sender.id, ['agent']).toggleAgentMode()
+    )
+    ipcMain.handle(APP_PLATFORM_CHANNELS.CLOSE_AGENT_PANEL, event =>
+      getShellViews(event.sender.id, ['agent']).closeAgentPanel()
+    )
+    ipcMain.handle(APP_PLATFORM_CHANNELS.SET_PANEL_WIDTH, (event, widthPx: number) =>
+      getShellViews(event.sender.id, ['shell']).setPanelWidth(widthPx)
+    )
+    ipcMain.handle(APP_PLATFORM_CHANNELS.AGENT_COMMAND, (event, command: AgentShellCommand) =>
+      getShellViews(event.sender.id, ['shell']).sendAgentCommand(command)
+    )
+    ipcMain.handle(APP_PLATFORM_CHANNELS.AGENT_RENDERER_READY, event =>
+      getShellViews(event.sender.id, ['agent']).markAgentRendererReady(event.sender.id)
+    )
 
     // Transport diagnostics bridge — preload reports remote WS connection state changes
     // so failures are visible in terminal/main.log (not only renderer console).

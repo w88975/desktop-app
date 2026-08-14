@@ -451,14 +451,18 @@ async function main(): Promise<void> {
   const mainCjsPath = join(DIST_DIR, "main.cjs");
   const preloadCjsPath = join(DIST_DIR, "bootstrap-preload.cjs");
   const toolbarPreloadCjsPath = join(DIST_DIR, "browser-toolbar-preload.cjs");
+  const shellPreloadCjsPath = join(DIST_DIR, "shell-preload.cjs");
+  const appHostPreloadCjsPath = join(DIST_DIR, "app-host-preload.cjs");
 
   // Remove old build files to ensure fresh build
   if (existsSync(mainCjsPath)) rmSync(mainCjsPath);
   if (existsSync(preloadCjsPath)) rmSync(preloadCjsPath);
   if (existsSync(toolbarPreloadCjsPath)) rmSync(toolbarPreloadCjsPath);
+  if (existsSync(shellPreloadCjsPath)) rmSync(shellPreloadCjsPath);
+  if (existsSync(appHostPreloadCjsPath)) rmSync(appHostPreloadCjsPath);
 
   // Build main and preload entries in parallel
-  const [mainResult, preloadResult, toolbarPreloadResult] = await Promise.all([
+  const [mainResult, preloadResult, toolbarPreloadResult, shellPreloadResult, appHostPreloadResult] = await Promise.all([
     runEsbuild(
       "apps/electron/src/main/index.ts",
       "apps/electron/dist/main.cjs",
@@ -472,6 +476,14 @@ async function main(): Promise<void> {
     runEsbuild(
       "apps/electron/src/preload/browser-toolbar.ts",
       "apps/electron/dist/browser-toolbar-preload.cjs"
+    ),
+    runEsbuild(
+      "apps/electron/src/preload/shell.ts",
+      "apps/electron/dist/shell-preload.cjs"
+    ),
+    runEsbuild(
+      "apps/electron/src/preload/app-host.ts",
+      "apps/electron/dist/app-host-preload.cjs"
     ),
   ]);
 
@@ -489,26 +501,34 @@ async function main(): Promise<void> {
     console.error("❌ Browser toolbar preload build failed:", toolbarPreloadResult.error);
     process.exit(1);
   }
+  if (!shellPreloadResult.success || !appHostPreloadResult.success) {
+    console.error("❌ App-platform preload build failed:", shellPreloadResult.error || appHostPreloadResult.error);
+    process.exit(1);
+  }
 
   // Wait for files to stabilize (filesystem flush)
   console.log("⏳ Waiting for build files to stabilize...");
-  const [mainStable, preloadStable, toolbarPreloadStable] = await Promise.all([
+  const [mainStable, preloadStable, toolbarPreloadStable, shellPreloadStable, appHostPreloadStable] = await Promise.all([
     waitForFileStable(mainCjsPath),
     waitForFileStable(preloadCjsPath),
     waitForFileStable(toolbarPreloadCjsPath),
+    waitForFileStable(shellPreloadCjsPath),
+    waitForFileStable(appHostPreloadCjsPath),
   ]);
 
-  if (!mainStable || !preloadStable || !toolbarPreloadStable) {
+  if (!mainStable || !preloadStable || !toolbarPreloadStable || !shellPreloadStable || !appHostPreloadStable) {
     console.error("❌ Build files did not stabilize");
     process.exit(1);
   }
 
   // Verify the built files are valid JavaScript
   console.log("🔍 Verifying build output...");
-  const [mainValid, preloadValid, toolbarPreloadValid] = await Promise.all([
+  const [mainValid, preloadValid, toolbarPreloadValid, shellPreloadValid, appHostPreloadValid] = await Promise.all([
     verifyJsFile(mainCjsPath),
     verifyJsFile(preloadCjsPath),
     verifyJsFile(toolbarPreloadCjsPath),
+    verifyJsFile(shellPreloadCjsPath),
+    verifyJsFile(appHostPreloadCjsPath),
   ]);
 
   if (!mainValid.valid) {
@@ -523,6 +543,10 @@ async function main(): Promise<void> {
 
   if (!toolbarPreloadValid.valid) {
     console.error("❌ browser-toolbar-preload.cjs is invalid:", toolbarPreloadValid.error);
+    process.exit(1);
+  }
+  if (!shellPreloadValid.valid || !appHostPreloadValid.valid) {
+    console.error("❌ App-platform preload is invalid:", shellPreloadValid.error || appHostPreloadValid.error);
     process.exit(1);
   }
 
@@ -591,7 +615,25 @@ async function main(): Promise<void> {
   esbuildContexts.push(toolbarPreloadContext);
   console.log("👀 Watching browser toolbar preload...");
 
-  // 5. Start Electron (build already verified)
+  for (const [entry, outfile, label] of [
+    ["apps/electron/src/preload/shell.ts", "apps/electron/dist/shell-preload.cjs", "shell preload"],
+    ["apps/electron/src/preload/app-host.ts", "apps/electron/dist/app-host-preload.cjs", "app-host preload"],
+  ] as const) {
+    const context = await esbuild.context({
+      entryPoints: [join(ROOT_DIR, entry)],
+      bundle: true,
+      platform: "node",
+      format: "cjs",
+      outfile: join(ROOT_DIR, outfile),
+      external: ["electron"],
+      logLevel: "info",
+    });
+    await context.watch();
+    esbuildContexts.push(context);
+    console.log(`👀 Watching ${label}...`);
+  }
+
+  // Start Electron (build already verified)
   console.log("🚀 Starting Electron...\n");
 
   const electronProc = spawn({

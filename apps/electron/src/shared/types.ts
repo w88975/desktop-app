@@ -2,6 +2,8 @@
 // Protocol re-exports (channels, DTOs, events, wire types)
 // =============================================================================
 export * from '@craft-agent/shared/protocol'
+export * from './app-platform'
+import type { AgentPresentationState, AgentShellCommand } from './app-platform'
 
 // =============================================================================
 // Package re-exports (convenience for renderer imports)
@@ -318,6 +320,14 @@ export interface ElectronAPI {
   onCloseRequested(callback: (request: WindowCloseRequest) => void): () => void
   /** Show/hide macOS traffic light buttons (for fullscreen overlays) */
   setTrafficLightsVisible(visible: boolean): Promise<void>
+
+  // Agent presentation inside native app-platform shell
+  getAgentPresentationState(): Promise<AgentPresentationState>
+  onAgentPresentationChanged(callback: (state: AgentPresentationState) => void): () => void
+  toggleAgentPresentationMode(): Promise<void>
+  closeAgentPanel(): Promise<void>
+  onAgentShellCommand(callback: (command: AgentShellCommand) => void): () => void
+  notifyAgentRendererReady(): Promise<void>
 
   // Event listeners
   onSessionEvent(callback: (event: SessionEvent) => void): () => void

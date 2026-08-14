@@ -33,10 +33,10 @@ import {
   Info,
   MailOpen,
   FolderKanban,
+  PanelLeft,
 } from "lucide-react"
 // SessionStatusIcons no longer used - icons come from dynamic sessionStatuses
 import { SourceAvatar } from "@/components/ui/source-avatar"
-import { TopBar } from "./TopBar"
 import { SquarePenRounded } from "../icons/SquarePenRounded"
 import { McpIcon } from "../icons/McpIcon"
 import { cn } from "@/lib/utils"
@@ -148,6 +148,11 @@ import {
 import { hasOpenOverlay } from "@/lib/overlay-detection"
 import { clearSourceIconCaches } from "@/lib/icon-cache"
 import { dispatchFocusInputEvent } from "./input/focus-input-events"
+import { WorkspaceSwitcher } from './WorkspaceSwitcher'
+import { useAgentPresentation } from '@/context/AgentPresentationContext'
+import { TopBarButton } from '../ui/TopBarButton'
+import { BrowserTabStrip } from '../browser/BrowserTabStrip'
+import type { AgentShellCommand } from '../../../shared/app-platform'
 
 /**
  * AppShellProps - Minimal props interface for AppShell component
@@ -532,6 +537,7 @@ function AppShellContent({
   } = contextValue
 
   const { t } = useTranslation()
+  const { isPanel, isFull } = useAgentPresentation()
 
   // Get hotkey labels from centralized action registry
   const newChatHotkey = useActionLabel('app.newChat').hotkey
@@ -559,9 +565,9 @@ function AppShellContent({
   const shellRef = useRef<HTMLDivElement>(null)
   const shellWidth = useContainerWidth(shellRef)
   const MOBILE_THRESHOLD = 768
-  const isAutoCompact = shellWidth > 0 && shellWidth < MOBILE_THRESHOLD
+  const isAutoCompact = !isPanel && shellWidth > 0 && shellWidth < MOBILE_THRESHOLD
 
-  const effectiveSidebarAndNavigatorHidden = isSidebarAndNavigatorHidden || isAutoCompact
+  const effectiveSidebarAndNavigatorHidden = isPanel || isSidebarAndNavigatorHidden || isAutoCompact
 
   // What's New overlay
   const [showWhatsNew, setShowWhatsNew] = React.useState(false)
@@ -1207,12 +1213,13 @@ function AppShellContent({
   })
 
   const handleToggleSidebar = useCallback(() => {
+    if (isPanel) return
     if (isSidebarAndNavigatorHidden) {
       setIsSidebarAndNavigatorHidden(false)
       return
     }
     setIsSidebarVisible(v => !v)
-  }, [isSidebarAndNavigatorHidden])
+  }, [isPanel, isSidebarAndNavigatorHidden])
 
   // Sidebar toggle (CMD+B)
   useAction('view.toggleSidebar', handleToggleSidebar)
@@ -2084,6 +2091,21 @@ function AppShellContent({
     handleNewChat()
   }, [menuNewChatTrigger, handleNewChat])
 
+  const shellCommandHandlerRef = useRef<(command: AgentShellCommand) => void>(() => {})
+  shellCommandHandlerRef.current = (command) => {
+    if (command === 'new-session') handleNewChat()
+    else if (command === 'open-settings') onOpenSettings()
+    else if (command === 'open-shortcuts') onOpenKeyboardShortcuts()
+    else if (command === 'toggle-sidebar') handleToggleSidebar()
+  }
+
+  useEffect(() => {
+    const api = window.electronAPI
+    const unsubscribe = api.onAgentShellCommand(command => shellCommandHandlerRef.current(command))
+    void api.notifyAgentRendererReady()
+    return unsubscribe
+  }, [])
+
   // Unified sidebar items: nav buttons only (agents system removed)
   type SidebarItem = {
     id: string
@@ -2338,35 +2360,43 @@ function AppShellContent({
 
   return (
     <AppShellProvider value={appShellContextValue}>
-        {/* === TOP BAR === */}
-        <TopBar
-          workspaces={workspaces}
-          activeWorkspaceId={activeWorkspaceId}
-          onSelectWorkspace={onSelectWorkspace}
-          workspaceUnreadMap={workspaceUnreadMap}
-          onWorkspaceCreated={() => onRefreshWorkspaces?.()}
-          onWorkspaceRemoved={() => onRefreshWorkspaces?.()}
-          activeSessionId={effectiveSessionId}
-          onNewChat={() => handleNewChat()}
-          onNewWindow={() => window.electronAPI.menuNewWindow()}
-          onOpenSettings={onOpenSettings}
-          onOpenSettingsSubpage={handleSettingsClick}
-          onOpenKeyboardShortcuts={onOpenKeyboardShortcuts}
-          onOpenStoredUserPreferences={onOpenStoredUserPreferences}
-          onBack={goBack}
-          onForward={goForward}
-          canGoBack={canGoBack}
-          canGoForward={canGoForward}
-          onToggleSidebar={handleToggleSidebar}
-          onToggleFocusMode={() => setIsSidebarAndNavigatorHidden(prev => !prev)}
-          onAddSessionPanel={() => handleNewChat(true)}
-          onAddBrowserPanel={() => { void handleNewBrowserWindow() }}
-          isCompact={isAutoCompact}
-        />
+        {isFull && (
+          <div className="fixed left-2 right-2 top-2 z-[100] flex items-center justify-between pointer-events-none">
+            <TopBarButton
+              aria-label={t('menu.toggleSidebar')}
+              isActive={!effectiveSidebarAndNavigatorHidden && isSidebarVisible}
+              onClick={handleToggleSidebar}
+              className="pointer-events-auto"
+            >
+              <PanelLeft className="h-[18px] w-[18px] text-foreground/70" strokeWidth={1.5} />
+            </TopBarButton>
+            <div className="pointer-events-auto flex min-w-0 items-center gap-1">
+              <BrowserTabStrip activeSessionId={effectiveSessionId} maxVisibleBadges={3} />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <TopBarButton aria-label={t('menu.addPanelMenu')} className="h-[26px] w-[26px] rounded-lg">
+                    <Plus className="h-4 w-4 text-foreground/50" strokeWidth={1.5} />
+                  </TopBarButton>
+                </DropdownMenuTrigger>
+                <StyledDropdownMenuContent align="end" minWidth="min-w-56">
+                  <StyledDropdownMenuItem onClick={() => handleNewChat(true)}>
+                    <SquarePenRounded className="h-3.5 w-3.5" />
+                    {t('session.newSessionInPanel')}
+                  </StyledDropdownMenuItem>
+                  <StyledDropdownMenuItem onClick={() => { void handleNewBrowserWindow() }}>
+                    <Globe className="h-3.5 w-3.5" />
+                    {t('browser.newWindow')}
+                  </StyledDropdownMenuItem>
+                </StyledDropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        )}
 
       {/* === OUTER LAYOUT: Unified Panel Stack | Right Sidebar === */}
       <div
         ref={shellRef}
+        data-agent-presentation={isPanel ? 'panel' : 'full'}
         className="flex items-stretch relative"
         style={{
           height: '100%',
@@ -2389,6 +2419,17 @@ function AppShellContent({
             <div className="flex h-full flex-col select-none">
               {/* Sidebar Top Section */}
               <div className="flex-1 flex flex-col min-h-0">
+                <div className="px-2 pb-2 pl-10 shrink-0">
+                  <WorkspaceSwitcher
+                    variant="topbar"
+                    workspaces={workspaces}
+                    activeWorkspaceId={activeWorkspaceId}
+                    onSelect={onSelectWorkspace}
+                    onWorkspaceCreated={() => onRefreshWorkspaces?.()}
+                    onWorkspaceRemoved={() => onRefreshWorkspaces?.()}
+                    workspaceUnreadMap={workspaceUnreadMap}
+                  />
+                </div>
                 {/* New Session Button - Gmail-style, with context menu for "Open in New Window" */}
                 <div className="px-2 pb-2 shrink-0">
                   <Tooltip>
@@ -3587,6 +3628,7 @@ function AppShellContent({
           isSidebarAndNavigatorHidden={effectiveSidebarAndNavigatorHidden}
           isRightSidebarVisible={false}
           isCompact={isAutoCompact}
+          focusedOnly={isPanel}
           isResizing={!!isResizing}
         />
 

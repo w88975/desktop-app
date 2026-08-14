@@ -8,6 +8,10 @@ import { getWorkspaceByNameOrId } from '@craft-agent/shared/config'
 import { classifyExternalUrl, formatBlockedUrlError } from '@craft-agent/shared/utils/url-safety'
 import { RPC_CHANNELS, type WindowCloseRequestSource } from '../shared/types'
 import type { SavedWindow } from './window-state'
+import { SurfaceRegistry } from './surface-registry'
+import type { SurfaceKind } from '../shared/app-platform'
+import type { SurfaceRegistration } from '../shared/app-platform'
+import { ShellViewManager } from './shell-view-manager'
 
 // Vite dev server URL for hot reload
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
@@ -55,6 +59,8 @@ export interface CreateWindowOptions {
 
 export class WindowManager {
   private windows: Map<number, ManagedWindow> = new Map()  // webContents.id → ManagedWindow
+  private readonly surfaces = new SurfaceRegistry()
+  private readonly shellViews = new Map<number, ShellViewManager>()
   private focusedModeWindows: Set<number> = new Set()  // webContents.id of windows in focused mode
   private pendingCloseTimeouts: Map<number, NodeJS.Timeout> = new Map()  // Fallback timeouts for window close
   private eventSink: ((channel: string, target: import('@craft-agent/shared/protocol').PushTarget, ...args: any[]) => void) | null = null
@@ -62,6 +68,10 @@ export class WindowManager {
   private keyboardCloseIntents: Set<number> = new Set()  // webContents.id flagged by Cmd/Ctrl+W before close
   private keyboardCloseIntentTimeouts: Map<number, NodeJS.Timeout> = new Map()  // Auto-clear stale keyboard-close intents
   private isAppQuitting = false  // Skip layered close interception during app quit
+
+  private resolveShellWebContentsId(webContentsId: number): number {
+    return this.surfaces.getShellWebContentsId(webContentsId) ?? webContentsId
+  }
 
   /**
    * Set the event sink and client resolver for pushing events via the RPC server
@@ -82,21 +92,23 @@ export class WindowManager {
 
   /** Resolve a window's current clientId from transport handshake state. */
   getClientIdForWindow(webContentsId: number): string | undefined {
-    return this.clientResolver?.(webContentsId)
+    const manager = this.getShellViewManager(webContentsId)
+    return this.clientResolver?.(manager?.getAgentWebContentsId() ?? webContentsId)
   }
 
   /** Push an event to a specific window via the RPC event sink. Falls back to webContents.send. */
   private pushToWindow(window: BrowserWindow, channel: string, ...args: any[]): void {
+    const targetWebContents = this.shellViews.get(window.webContents.id)?.getAgentWebContents() ?? window.webContents
     if (this.eventSink && this.clientResolver) {
-      const clientId = this.clientResolver(window.webContents.id)
+      const clientId = this.clientResolver(targetWebContents.id)
       if (clientId) {
         this.eventSink(channel, { to: 'client', clientId }, ...args)
         return
       }
     }
     // Fallback: direct webContents.send (used before WS handshake completes)
-    if (!window.isDestroyed() && !window.webContents.isDestroyed() && window.webContents.mainFrame) {
-      window.webContents.send(channel, ...args)
+    if (!window.isDestroyed() && !targetWebContents.isDestroyed() && targetWebContents.mainFrame) {
+      targetWebContents.send(channel, ...args)
     }
   }
 
@@ -254,11 +266,13 @@ export class WindowManager {
         autoHideMenuBar: true,
       }),
       webPreferences: {
-        preload: join(__dirname, 'bootstrap-preload.cjs'),
+        preload: join(__dirname, 'shell-preload.cjs'),
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: false,
-        webviewTag: false // Browser integration uses WebContentsView, not <webview>
+        // App-platform surfaces are DOM-hosted guest renderers. Main validates
+        // every attachment and overwrites security-sensitive preferences.
+        webviewTag: true,
       }
     })
 
@@ -311,6 +325,51 @@ export class WindowManager {
     // __get-workspace-id (via sendSync) which reads this map during eval.
     const webContentsId = window.webContents.id
     this.windows.set(webContentsId, { window, workspaceId })
+    this.surfaces.register({
+      webContentsId,
+      shellWebContentsId: webContentsId,
+      workspaceId,
+      kind: 'shell',
+    })
+    const shellViewManager = new ShellViewManager({
+      window,
+      workspaceId,
+      initialAgentMode: focused || !workspaceId ? 'full' : 'hidden',
+      registerSurface: (surfaceWebContentsId, kind, tabId) => {
+        this.registerSurface(webContentsId, surfaceWebContentsId, kind, tabId)
+      },
+      unregisterSurface: surfaceWebContentsId => {
+        this.unregisterSurface(surfaceWebContentsId)
+      },
+    })
+    this.shellViews.set(webContentsId, shellViewManager)
+
+    window.webContents.on('will-attach-webview', (event, webPreferences, params) => {
+      if (!shellViewManager.authorizeGuest(params.src, webPreferences)) {
+        event.preventDefault()
+        windowLog.warn(`[app-platform] Blocked unauthorized webview attachment: ${params.src}`)
+      }
+    })
+
+    window.webContents.on('did-attach-webview', (_event, guestWebContents) => {
+      if (!shellViewManager.attachGuest(guestWebContents)) {
+        windowLog.warn(`[app-platform] Closing unrecognized or duplicate guest: ${guestWebContents.getURL()}`)
+        guestWebContents.close()
+        return
+      }
+
+      if (!app.isPackaged) {
+        guestWebContents.on('context-menu', (_contextEvent, params) => {
+          Menu.buildFromTemplate([
+            { label: 'Inspect Element', click: () => guestWebContents.inspectElement(params.x, params.y) },
+            { type: 'separator' },
+            { label: 'Cut', role: 'cut', enabled: params.editFlags.canCut },
+            { label: 'Copy', role: 'copy', enabled: params.editFlags.canCopy },
+            { label: 'Paste', role: 'paste', enabled: params.editFlags.canPaste },
+          ]).popup()
+        })
+      }
+    })
 
     // Apply window-title policy now that the map size reflects this window —
     // covers both the new window and any existing windows that should switch
@@ -322,51 +381,18 @@ export class WindowManager {
       this.focusedModeWindows.add(webContentsId)
     }
 
-    // Load the renderer - use restoreUrl if provided, otherwise build from options
-    if (restoreUrl) {
-      // Restore from saved URL - need to adapt for dev vs prod
-      if (VITE_DEV_SERVER_URL) {
-        // In dev mode, replace the base URL but keep the path and query
-        try {
-          const savedUrl = new URL(restoreUrl)
-          const devUrl = new URL(VITE_DEV_SERVER_URL)
-          // Preserve pathname and search from saved URL, use dev server host
-          devUrl.pathname = savedUrl.pathname
-          devUrl.search = savedUrl.search
-          window.loadURL(devUrl.toString())
-        } catch {
-          // Fallback if URL parsing fails
-          windowLog.warn('Failed to parse restoreUrl, using default:', restoreUrl)
-          const params = new URLSearchParams({ workspaceId, ...(focused && { focused: 'true' }) }).toString()
-          window.loadURL(`${VITE_DEV_SERVER_URL}?${params}`)
-        }
-      } else {
-        // In prod, always extract query params and load from current __dirname.
-        // Never load file:// URLs directly — the path may be stale (e.g. Linux AppImage
-        // mounts to a different /tmp dir on each launch). See #13.
-        try {
-          const savedUrl = new URL(restoreUrl)
-          const query: Record<string, string> = {}
-          savedUrl.searchParams.forEach((value, key) => { query[key] = value })
-          window.loadFile(join(__dirname, 'renderer/index.html'), { query })
-        } catch {
-          window.loadFile(join(__dirname, 'renderer/index.html'), { query: { workspaceId } })
-        }
-      }
+    // Shell always starts on Home. Runtime app tabs are intentionally not restored in v1.
+    if (restoreUrl) windowLog.info('Ignoring restored renderer URL for app-platform v1')
+    if (VITE_DEV_SERVER_URL) {
+      window.loadURL(new URL('/shell.html', VITE_DEV_SERVER_URL).toString())
     } else {
-      // Build URL from options
-      const query: Record<string, string> = { workspaceId }
-      if (focused) {
-        query.focused = 'true' // Open in focused mode (no sidebars)
-      }
-
-      if (VITE_DEV_SERVER_URL) {
-        const params = new URLSearchParams(query).toString()
-        window.loadURL(`${VITE_DEV_SERVER_URL}?${params}`)
-      } else {
-        window.loadFile(join(__dirname, 'renderer/index.html'), { query })
-      }
+      window.loadFile(join(__dirname, 'renderer/shell.html'))
     }
+    window.webContents.on('did-finish-load', () => {
+      windowLog.info(
+        `App-platform surface ready: kind=shell, wc=${window.webContents.id}, rendererPid=${window.webContents.getOSProcessId()}`
+      )
+    })
 
     // Fallback: if the renderer fails to load (e.g. stale path, disk error),
     // recover gracefully by loading the default state instead of showing a white screen. See #13.
@@ -379,11 +405,10 @@ export class WindowManager {
         failLoadRetries++
         windowLog.info(`Retrying Vite dev server (attempt ${failLoadRetries}/5)...`)
         setTimeout(() => {
-          const params = new URLSearchParams({ workspaceId }).toString()
-          window.loadURL(`${VITE_DEV_SERVER_URL}?${params}`)
+          window.loadURL(new URL('/shell.html', VITE_DEV_SERVER_URL).toString())
         }, 1000)
       } else {
-        window.loadFile(join(__dirname, 'renderer/index.html'), { query: { workspaceId } })
+        window.loadFile(join(__dirname, 'renderer/shell.html'))
       }
     })
 
@@ -503,7 +528,10 @@ export class WindowManager {
       this.keyboardCloseIntents.delete(webContentsId)
 
       nativeTheme.removeListener('updated', themeHandler)
+      this.shellViews.get(webContentsId)?.destroy()
+      this.shellViews.delete(webContentsId)
       this.windows.delete(webContentsId)
+      this.surfaces.unregisterShell(webContentsId)
       this.focusedModeWindows.delete(webContentsId)
       // Re-apply window-title policy — surviving windows revert from workspace
       // name back to app name when the count drops from 2 → 1.
@@ -519,7 +547,8 @@ export class WindowManager {
    * Get window by webContents.id (used by IPC handlers instead of BrowserWindow.fromId)
    */
   getWindowByWebContentsId(wcId: number): BrowserWindow | null {
-    const managed = this.windows.get(wcId)
+    const shellWebContentsId = this.resolveShellWebContentsId(wcId)
+    const managed = this.windows.get(shellWebContentsId)
     return managed?.window ?? null
   }
 
@@ -558,8 +587,15 @@ export class WindowManager {
    * Get workspace ID for a window (by webContents.id)
    */
   getWorkspaceForWindow(webContentsId: number): string | null {
-    const managed = this.windows.get(webContentsId)
-    return managed?.workspaceId ?? null
+    return this.surfaces.getWorkspaceId(webContentsId)
+  }
+
+  getShellViewManager(webContentsId: number): ShellViewManager | null {
+    return this.shellViews.get(this.resolveShellWebContentsId(webContentsId)) ?? null
+  }
+
+  getSurfaceRegistration(webContentsId: number): SurfaceRegistration | null {
+    return this.surfaces.get(webContentsId)
   }
 
   /**
@@ -574,7 +610,7 @@ export class WindowManager {
    * Close window by webContents.id (triggers close event which may be intercepted)
    */
   closeWindow(webContentsId: number): void {
-    const managed = this.windows.get(webContentsId)
+    const managed = this.windows.get(this.resolveShellWebContentsId(webContentsId))
     if (managed && !managed.window.isDestroyed()) {
       managed.window.close()
     }
@@ -585,14 +621,15 @@ export class WindowManager {
    * Used when renderer confirms the close action (no modals to close).
    */
   forceCloseWindow(webContentsId: number): void {
+    const shellWebContentsId = this.resolveShellWebContentsId(webContentsId)
     // Clear any pending close timeout since renderer confirmed
-    const timeout = this.pendingCloseTimeouts.get(webContentsId)
+    const timeout = this.pendingCloseTimeouts.get(shellWebContentsId)
     if (timeout) {
       clearTimeout(timeout)
-      this.pendingCloseTimeouts.delete(webContentsId)
+      this.pendingCloseTimeouts.delete(shellWebContentsId)
     }
 
-    const managed = this.windows.get(webContentsId)
+    const managed = this.windows.get(shellWebContentsId)
     if (managed && !managed.window.isDestroyed()) {
       // Remove close listener temporarily to avoid infinite loop,
       // then destroy the window directly
@@ -605,10 +642,11 @@ export class WindowManager {
    * Clears the fallback timeout so the window stays open.
    */
   cancelPendingClose(webContentsId: number): void {
-    const timeout = this.pendingCloseTimeouts.get(webContentsId)
+    const shellWebContentsId = this.resolveShellWebContentsId(webContentsId)
+    const timeout = this.pendingCloseTimeouts.get(shellWebContentsId)
     if (timeout) {
       clearTimeout(timeout)
-      this.pendingCloseTimeouts.delete(webContentsId)
+      this.pendingCloseTimeouts.delete(shellWebContentsId)
     }
   }
 
@@ -629,10 +667,12 @@ export class WindowManager {
    * @returns true if window was found and updated, false otherwise
    */
   updateWindowWorkspace(webContentsId: number, workspaceId: string): boolean {
-    const managed = this.windows.get(webContentsId)
+    const shellWebContentsId = this.resolveShellWebContentsId(webContentsId)
+    const managed = this.windows.get(shellWebContentsId)
     if (managed) {
       const oldWorkspaceId = managed.workspaceId
       managed.workspaceId = workspaceId
+      this.surfaces.updateWorkspace(shellWebContentsId, workspaceId)
       // Re-apply window-title policy so in-window workspace switches update
       // the titlebar immediately (relevant when ≥2 windows are open).
       this.refreshWindowTitles()
@@ -653,9 +693,46 @@ export class WindowManager {
   registerWindow(window: BrowserWindow, workspaceId: string): void {
     const webContentsId = window.webContents.id
     this.windows.set(webContentsId, { window, workspaceId })
+    this.surfaces.unregisterShell(webContentsId)
+    this.surfaces.register({
+      webContentsId,
+      shellWebContentsId: webContentsId,
+      workspaceId,
+      kind: 'shell',
+    })
     // Re-apply window-title policy after re-registration (e.g. post-refresh).
     this.refreshWindowTitles()
     windowLog.info(`Registered window ${webContentsId} for workspace ${workspaceId}`)
+  }
+
+  /** Register Agent, Home, or app web contents owned by a shell window. */
+  registerSurface(
+    shellWebContentsId: number,
+    webContentsId: number,
+    kind: Exclude<SurfaceKind, 'shell'>,
+    tabId?: string
+  ): void {
+    const managed = this.windows.get(shellWebContentsId)
+    if (!managed) {
+      throw new Error(`Cannot register surface for unknown shell ${shellWebContentsId}`)
+    }
+
+    this.surfaces.register({
+      webContentsId,
+      shellWebContentsId,
+      workspaceId: managed.workspaceId,
+      kind,
+      tabId,
+    })
+  }
+
+  /** Remove a child rendering surface after its web contents is destroyed. */
+  unregisterSurface(webContentsId: number): boolean {
+    const surface = this.surfaces.get(webContentsId)
+    if (surface?.kind === 'shell') {
+      throw new Error('Shell surfaces are removed with their BrowserWindow')
+    }
+    return this.surfaces.unregister(webContentsId)
   }
 
   /**
