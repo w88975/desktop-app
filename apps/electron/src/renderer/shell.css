@@ -16,7 +16,7 @@ body,
 }
 
 body {
-  background: var(--background);
+  background: var(--shell-background);
   color: var(--foreground);
 }
 
@@ -30,7 +30,7 @@ button { font: inherit; color: inherit; }
   align-items: center;
   gap: 2px;
   padding: 0 10px 0 84px;
-  background: var(--background);
+  background: var(--shell-background);
   -webkit-app-region: drag;
   user-select: none;
   overflow: visible;
@@ -85,9 +85,12 @@ button { font: inherit; color: inherit; }
   background: var(--border);
 }
 
+/* Hover darkens; the active tab instead goes light (see below). Keeping the two
+   moving in opposite directions is what stops them reading as the same state on
+   the tinted title bar. An active tab therefore does not take hover. */
 .agent-button:hover,
-.home-tab:hover,
-.app-tab:hover {
+.home-tab:not(.active):hover,
+.app-tab:not(.active):hover {
   background: color-mix(in srgb, var(--foreground) 5%, transparent);
   color: var(--foreground);
 }
@@ -113,11 +116,21 @@ button { font: inherit; color: inherit; }
   cursor: pointer;
   white-space: nowrap;
   font-size: 13px;
-  transition: background-color 100ms ease, color 100ms ease;
+  transition: background-color 100ms ease, color 100ms ease, box-shadow 100ms ease;
 }
 
+/* Active tab takes the surface color of the rendering surface it fronts, so the
+   tab and its content read as one plane. The flat ring supplies the edge the
+   3% lightness gap alone cannot. */
 .home-tab.active,
-.app-tab.active,
+.app-tab.active {
+  background: var(--background);
+  box-shadow: var(--shadow-minimal-flat);
+  color: var(--foreground);
+}
+
+/* The Agent toggle is a button, not a tab — it fronts no surface, so it keeps
+   the overlay treatment rather than going light. */
 .agent-button.active {
   background: color-mix(in srgb, var(--foreground) 5%, transparent);
   color: var(--foreground);
@@ -148,7 +161,7 @@ button { font: inherit; color: inherit; }
   z-index: 0;
   inset: 48px 0 0;
   overflow: hidden;
-  background: var(--background);
+  background: var(--shell-background);
 }
 
 .app-region {

@@ -310,6 +310,22 @@
   --md-counters: var(--foreground-50);
 }
 
+/* =============================================================================
+   SHELL SURFACE
+
+   Backdrop of the Shell window's chrome — the Title bar and the Content region
+   behind the rendering surfaces (see docs/app-platform/glossary.md). App and
+   Agent surfaces keep `--background`, so they read as cards floating on this.
+
+   Declared once, outside the light/dark blocks on purpose: it resolves through
+   `--foreground-3`, which is redefined per theme, so dark mode gets "slightly
+   lighter than background" for free. Note the name is about the surface's role,
+   not its hue — it is only "light gray" in light mode.
+============================================================================= */
+:root {
+  --shell-background: var(--foreground-3);
+}
+
 /* Theme Override - Semi-transparent background to allow vibrancy through */
 html[data-theme-override]::before {
   content: '';
@@ -401,6 +417,9 @@ html[data-font="inter"] {
   --color-info: var(--info);
   --color-success: var(--success);
   --color-destructive: var(--destructive);
+
+  /* === SHELL SURFACE === */
+  --color-shell-background: var(--shell-background);
 
   /* === MIX VARIANTS (solid interpolation) === */
   --color-foreground-1\.5: var(--foreground-1\.5);

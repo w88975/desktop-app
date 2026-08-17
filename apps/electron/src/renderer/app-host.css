@@ -1,5 +1,16 @@
-:root { color-scheme: light dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+/* App surfaces are separate webview entries and deliberately do not import
+   renderer/index.css — that would pull the whole Tailwind build into every
+   surface for what is currently a placeholder. Mirror the framework's base
+   colors by name instead of inventing hex values; index.css stays the source of
+   truth for both. Surfaces keep `--background` so they read as cards floating
+   on the shell's `--shell-background`. */
+:root {
+  color-scheme: light dark;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  --background: light-dark(oklch(0.98 0.003 265), oklch(0.145 0.015 270));
+  --foreground: light-dark(oklch(0.185 0.01 270), oklch(0.95 0.01 270));
+}
 * { box-sizing: border-box; }
 html, body, #root, main { width: 100%; height: 100%; margin: 0; }
-main { display: grid; place-items: center; background: light-dark(#faf9fb, #19181c); color: light-dark(#343138, #e9e6ec); }
+main { display: grid; place-items: center; background: var(--background); color: var(--foreground); }
 h1 { font-size: 18px; font-weight: 600; }
