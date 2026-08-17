@@ -189,6 +189,7 @@ function Shell() {
         '--agent-panel-width': `${state.agent.panelWidthPx}px`,
         '--panel-gap': `${PANEL_GAP}px`,
         '--panel-edge-inset': `${PANEL_EDGE_INSET}px`,
+        '--panel-shadow-inset': `${PANEL_STACK_VERTICAL_OVERFLOW}px`,
         '--radius-edge': `${RADIUS_EDGE}px`,
         '--radius-inner': `${RADIUS_INNER}px`,
       } as React.CSSProperties}

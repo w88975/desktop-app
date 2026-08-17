@@ -124,6 +124,10 @@ acceptance criteria.
 - Shell content surfaces reuse Agent panel-system geometry: shared edge inset,
   inter-panel gap, inner/edge corner radii, and cursor-following resize sash.
   Double-clicking the App/Agent sash restores the default 40% panel width.
+- Header and content surfaces keep the shared 8px panel-shadow inset, preventing
+  top shadows from being clipped by the shell surface viewport. Full Agent also
+  applies that inset inside its guest viewport, keeping All Sessions and chat
+  panel shadows fully visible.
 - Narrow windows do not auto-switch Agent to full mode. Panel and app each keep
   360px minimum; shell window minimum width provides required room. Only an
   explicit user action changes panel/full mode.

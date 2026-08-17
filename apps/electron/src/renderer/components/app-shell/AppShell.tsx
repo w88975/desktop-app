@@ -2379,6 +2379,7 @@ export function FullAgentShell({
         className="flex items-stretch relative"
         style={{
           height: '100%',
+          paddingTop: PANEL_STACK_VERTICAL_OVERFLOW,
           paddingRight: isAutoCompact ? 0 : PANEL_EDGE_INSET,
           paddingBottom: isAutoCompact ? 0 : PANEL_EDGE_INSET,
           paddingLeft: 0,
