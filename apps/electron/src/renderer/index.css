@@ -117,6 +117,18 @@
     rgba(0, 0, 0, 0) 0px 0px 0px 0px,
     rgba(var(--foreground-rgb), 0.06) 0px 0px 0px 1px;
 
+  /* Panel elevation — one step above `--shadow-minimal` (adds a third blur
+     layer). The `.shadow-middle` utility renders this; the variable exists so
+     non-Tailwind consumers (the Shell's plain-CSS rendering surfaces) can reach
+     the same value instead of re-typing the six layers. */
+  --shadow-middle:
+    rgba(0, 0, 0, 0) 0px 0px 0px 0px,
+    rgba(0, 0, 0, 0) 0px 0px 0px 0px,
+    rgba(var(--foreground-rgb), 0.06) 0px 0px 0px 1px,
+    rgba(0, 0, 0, var(--shadow-blur-opacity)) 0px 1px 1px -0.5px,
+    rgba(0, 0, 0, var(--shadow-blur-opacity)) 0px 3px 3px -1.5px,
+    rgba(0, 0, 0, var(--shadow-blur-opacity)) 0px 6px 6px -3px;
+
   --shadow-modal-small:
     rgba(0, 0, 0, 0) 0px 0px 0px 0px,
     rgba(0, 0, 0, 0) 0px 0px 0px 0px,
@@ -631,13 +643,7 @@ html[data-font="inter"] {
   }
 
   .shadow-middle {
-    box-shadow:
-      rgba(0, 0, 0, 0) 0px 0px 0px 0px,
-      rgba(0, 0, 0, 0) 0px 0px 0px 0px,
-      rgba(var(--foreground-rgb), 0.06) 0px 0px 0px 1px,
-      rgba(0, 0, 0, var(--shadow-blur-opacity)) 0px 1px 1px -0.5px,
-      rgba(0, 0, 0, var(--shadow-blur-opacity)) 0px 3px 3px -1.5px,
-      rgba(0, 0, 0, var(--shadow-blur-opacity)) 0px 6px 6px -3px;
+    box-shadow: var(--shadow-middle);
   }
 
   /* Tinted shadow using CSS variable - use with style={{ '--shadow-color': 'r, g, b' }} */
