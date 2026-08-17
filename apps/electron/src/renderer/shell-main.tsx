@@ -113,7 +113,9 @@ function ShellResizeSash({ panelWidth }: { panelWidth: number }) {
       style={{
         right,
         width: PANEL_SASH_HIT_WIDTH,
-        top: PANEL_STACK_VERTICAL_OVERFLOW,
+        // Surfaces now start flush against the title bar, so the sash does too —
+        // otherwise the top of the seam is not draggable.
+        top: 0,
         bottom: PANEL_EDGE_INSET + PANEL_STACK_VERTICAL_OVERFLOW,
       }}
       onMouseMove={handlers.onMouseMove}
@@ -189,7 +191,6 @@ function Shell() {
         '--agent-panel-width': `${state.agent.panelWidthPx}px`,
         '--panel-gap': `${PANEL_GAP}px`,
         '--panel-edge-inset': `${PANEL_EDGE_INSET}px`,
-        '--panel-shadow-inset': `${PANEL_STACK_VERTICAL_OVERFLOW}px`,
         '--radius-edge': `${RADIUS_EDGE}px`,
         '--radius-inner': `${RADIUS_INNER}px`,
       } as React.CSSProperties}

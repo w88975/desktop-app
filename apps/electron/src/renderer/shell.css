@@ -166,7 +166,7 @@ button { font: inherit; color: inherit; }
 
 .app-region {
   position: absolute;
-  top: var(--panel-shadow-inset);
+  top: 0;
   right: var(--panel-edge-inset);
   bottom: var(--panel-edge-inset);
   left: var(--panel-edge-inset);
@@ -206,7 +206,7 @@ html[data-resizing="true"] .app-region {
 }
 
 .agent-surface {
-  top: var(--panel-shadow-inset);
+  top: 0;
   right: var(--panel-edge-inset);
   bottom: var(--panel-edge-inset);
   width: var(--agent-panel-width);
@@ -225,7 +225,7 @@ html[data-resizing="true"] .app-region {
 }
 
 .agent-surface.agent-full-sized {
-  top: var(--panel-shadow-inset);
+  top: 0;
   right: 0;
   bottom: 0;
   left: 0;
