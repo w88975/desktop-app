@@ -237,6 +237,9 @@ export function WorkspaceSwitcher({
                       : <Cloud className="h-3 w-3 text-muted-foreground shrink-0" />
                   )}
                   <ChevronDown className="h-3 w-3 opacity-50 shrink-0" />
+                  {/* Unread elsewhere — same signal the topbar variant carries, so
+                    * switching variants does not silently drop it. */}
+                  {hasUnreadInOtherWorkspaces && <span className="h-2 w-2 rounded-full bg-accent shrink-0" />}
                 </>
               )}
             </button>

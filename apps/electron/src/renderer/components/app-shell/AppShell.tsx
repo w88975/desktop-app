@@ -2357,18 +2357,37 @@ export function FullAgentShell({
 
   return (
     <AppShellProvider value={appShellContextValue}>
-        <div className="fixed left-2 right-2 top-2 z-[100] flex items-center justify-between pointer-events-none">
-            <TopBarButton
-              aria-label={t('menu.toggleSidebar')}
-              isActive={!effectiveSidebarAndNavigatorHidden && isSidebarVisible}
-              onClick={handleToggleSidebar}
-              className="pointer-events-auto"
-            >
-              <PanelLeft className="h-[18px] w-[18px] text-foreground/70" strokeWidth={1.5} />
-            </TopBarButton>
-            <div className="pointer-events-auto flex min-w-0 items-center gap-1">
-              <BrowserTabStrip activeSessionId={effectiveSessionId} maxVisibleBadges={3} />
-            </div>
+        {/* Sidebar rail — the toggle is right-aligned within the sidebar's own column,
+          * so its right edge lines up with the New Session button below it (both land
+          * on the column's px-2 inset). The left of the rail is deliberately empty,
+          * reserved for the app logo.
+          *
+          * It stays `fixed` instead of living in the sidebar's DOM because the sidebar
+          * collapses to 0 width — a toggle inside it would disappear along with it,
+          * leaving no way back. When collapsed the rail shrinks to one button's worth
+          * of width (px-2 + 28px button + px-2), parking the toggle at the window edge.
+          *
+          * The button stays transparent: PanelHeaderCenterButton's white chip earns its
+          * keep on a panel header, where the ring separates it from the card beneath,
+          * but this rail has no card behind it and the chip reads as a stray tile. Only
+          * the icon size follows the panel controls (16px). */}
+        <div
+          className="fixed left-0 top-2 z-[100] flex items-center justify-end px-2 pointer-events-none"
+          style={{ width: !effectiveSidebarAndNavigatorHidden && isSidebarVisible ? sidebarWidth : 8 + 28 + 8 }}
+        >
+          <TopBarButton
+            aria-label={t('menu.toggleSidebar')}
+            isActive={!effectiveSidebarAndNavigatorHidden && isSidebarVisible}
+            onClick={handleToggleSidebar}
+            className="pointer-events-auto"
+          >
+            <PanelLeft className="h-4 w-4 text-foreground/70" strokeWidth={1.5} />
+          </TopBarButton>
+        </div>
+
+        {/* Browser tab strip keeps the window's right end to itself. */}
+        <div className="fixed right-2 top-2 z-[100] flex min-w-0 items-center gap-1 pointer-events-auto">
+          <BrowserTabStrip activeSessionId={effectiveSessionId} maxVisibleBadges={3} />
         </div>
 
       {/* === OUTER LAYOUT: Unified Panel Stack | Right Sidebar === */}
@@ -2399,19 +2418,12 @@ export function FullAgentShell({
             <div className="flex h-full flex-col select-none">
               {/* Sidebar Top Section */}
               <div className="flex-1 flex flex-col min-h-0">
-                <div className="px-2 pb-2 pl-10 shrink-0">
-                  <WorkspaceSwitcher
-                    variant="topbar"
-                    workspaces={workspaces}
-                    activeWorkspaceId={activeWorkspaceId}
-                    onSelect={onSelectWorkspace}
-                    onWorkspaceCreated={() => onRefreshWorkspaces?.()}
-                    onWorkspaceRemoved={() => onRefreshWorkspaces?.()}
-                    workspaceUnreadMap={workspaceUnreadMap}
-                  />
-                </div>
                 {/* New Session Button - Gmail-style, with context menu for "Open in New Window" */}
-                <div className="px-2 pb-2 shrink-0">
+                {/* pt-9 clears the floating sidebar-toggle button that overlays this
+                  * panel's top-left corner. The workspace pill used to absorb it with
+                  * pl-10 and sit beside it; now that the pill moved to the bottom, the
+                  * first item has to start below the button instead. */}
+                <div className="px-2 pb-2 pt-9 shrink-0">
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div>
@@ -2706,6 +2718,20 @@ export function FullAgentShell({
                 </div>
               </div>
 
+              {/* Workspace selector — pinned to the sidebar bottom, full width.
+                * Sits outside the scrolling nav section so it stays visible; the
+                * nav's mask-fade-bottom fades the list out just above it. */}
+              <div className="px-2 pt-1 pb-2 shrink-0">
+                <WorkspaceSwitcher
+                  variant="sidebar"
+                  workspaces={workspaces}
+                  activeWorkspaceId={activeWorkspaceId}
+                  onSelect={onSelectWorkspace}
+                  onWorkspaceCreated={() => onRefreshWorkspaces?.()}
+                  onWorkspaceRemoved={() => onRefreshWorkspaces?.()}
+                  workspaceUnreadMap={workspaceUnreadMap}
+                />
+              </div>
             </div>
           </div>
           }
