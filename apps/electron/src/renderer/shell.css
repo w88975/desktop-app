@@ -153,13 +153,20 @@ button { font: inherit; color: inherit; }
 
 .app-region {
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: var(--panel-edge-inset);
+  bottom: var(--panel-edge-inset);
+  left: var(--panel-edge-inset);
   min-width: 0;
   transition: right 120ms ease-out;
 }
 
 .app-region.with-agent-panel {
-  right: var(--agent-panel-width);
+  right: calc(var(--agent-panel-width) + var(--panel-edge-inset) + var(--panel-gap));
+}
+
+html[data-resizing="true"] .app-region {
+  transition: none;
 }
 
 .surface-webview {
@@ -173,6 +180,9 @@ button { font: inherit; color: inherit; }
   inset: 0;
   width: 100%;
   height: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-inner) var(--radius-inner) var(--radius-edge) var(--radius-edge);
+  box-shadow: var(--shadow-middle);
   visibility: hidden;
   pointer-events: none;
 }
@@ -184,11 +194,14 @@ button { font: inherit; color: inherit; }
 
 .agent-surface {
   top: 0;
-  right: 0;
-  bottom: 0;
+  right: var(--panel-edge-inset);
+  bottom: var(--panel-edge-inset);
   width: var(--agent-panel-width);
-  height: 100%;
+  height: auto;
   z-index: 10;
+  overflow: hidden;
+  border-radius: var(--radius-inner) var(--radius-inner) var(--radius-edge) var(--radius-edge);
+  box-shadow: var(--shadow-middle);
   visibility: hidden;
   pointer-events: none;
 }
@@ -198,9 +211,18 @@ button { font: inherit; color: inherit; }
   pointer-events: auto;
 }
 
-.agent-surface.agent-full-visible {
+.agent-surface.agent-full-sized {
+  top: 0;
+  right: 0;
+  bottom: 0;
   left: 0;
   width: 100%;
+  height: 100%;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.agent-surface.agent-full-visible {
   visibility: visible;
   pointer-events: auto;
 }
@@ -208,25 +230,14 @@ button { font: inherit; color: inherit; }
 .splitter {
   position: absolute;
   z-index: 20;
-  top: 0;
-  right: calc(var(--agent-panel-width) - 4px);
-  bottom: 0;
-  width: 8px;
   cursor: col-resize;
 }
 
-.splitter::after {
-  content: '';
+.splitter-line {
   position: absolute;
-  left: 3px;
+  left: 50%;
+  transform: translateX(-50%);
   top: 0;
   bottom: 0;
-  width: 2px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
-  transition: background-color 100ms ease;
-}
-
-.splitter:hover::after {
-  background: color-mix(in srgb, var(--foreground) 20%, transparent);
 }

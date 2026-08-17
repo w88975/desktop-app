@@ -125,4 +125,31 @@ describe('ShellViewManager webview lifecycle', () => {
     manager.markAgentRendererReady(20)
     expect(agent.send).toHaveBeenCalledWith('app-platform:agent-command-received', 'new-session')
   })
+
+  it('hides visible Full Agent when Home or an app tab is activated', () => {
+    const manager = new ShellViewManager({
+      window: createWindow() as any,
+      workspaceId: 'ws-1',
+      initialAgentMode: 'full',
+      registerSurface: () => {},
+      unregisterSurface: () => {},
+    })
+
+    manager.activateHome()
+    expect(manager.getState()).toMatchObject({
+      activeTabId: null,
+      agent: { visible: false, lastMode: 'full' },
+    })
+
+    manager.openApp('todo-placeholder')
+    const tabId = manager.getState().tabs[0].id
+    manager.toggleAgent()
+    expect(manager.getState().agent.visible).toBe(true)
+
+    manager.activateTab(tabId)
+    expect(manager.getState()).toMatchObject({
+      activeTabId: tabId,
+      agent: { visible: false, lastMode: 'full' },
+    })
+  })
 })

@@ -55,8 +55,6 @@ interface PanelStackContainerProps {
   isRightSidebarVisible?: boolean
   /** Compact mode: single-panel, list/content toggle (mobile or narrow window) */
   isCompact?: boolean
-  /** Render only focused content panel without compact navigator transitions. */
-  focusedOnly?: boolean
   isResizing?: boolean
 }
 
@@ -68,7 +66,6 @@ export function PanelStackContainer({
   isSidebarAndNavigatorHidden,
   isRightSidebarVisible,
   isCompact = false,
-  focusedOnly = false,
   isResizing,
 }: PanelStackContainerProps) {
   const panelStack = useAtomValue(panelStackAtom)
@@ -84,7 +81,7 @@ export function PanelStackContainer({
   const isDetailFocused = isDetailNavState(focusedNavState)
   const hasSelectedContent = isCompact && isDetailFocused
 
-  const visiblePanels = isCompact || focusedOnly
+  const visiblePanels = isCompact
     ? contentPanels.filter(e => e.id === focusedPanelId).slice(0, 1)
     : contentPanels
 

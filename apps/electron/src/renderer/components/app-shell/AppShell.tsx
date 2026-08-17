@@ -153,6 +153,7 @@ import { useAgentPresentation } from '@/context/AgentPresentationContext'
 import { TopBarButton } from '../ui/TopBarButton'
 import { BrowserTabStrip } from '../browser/BrowserTabStrip'
 import type { AgentShellCommand } from '../../../shared/app-platform'
+import { AgentPanel } from './AgentPanel'
 
 /**
  * AppShellProps - Minimal props interface for AppShell component
@@ -490,19 +491,34 @@ function FilterLabelItems({
  * - 'state': Shows sessions with a specific todo state
  */
 export function AppShell(props: AppShellProps) {
-  // Wrap with EscapeInterruptProvider so AppShellContent can use useEscapeInterrupt
+  const { isPanel } = useAgentPresentation()
+
+  useEffect(() => {
+    const api = window.electronAPI
+    const unsubscribe = api.onAgentShellCommand((command: AgentShellCommand) => {
+      window.dispatchEvent(new CustomEvent('agent-shell-command', { detail: command }))
+    })
+    void api.notifyAgentRendererReady()
+    return unsubscribe
+  }, [])
+
   return (
     <EscapeInterruptProvider>
-      <AppShellContent {...props} />
+      {isPanel ? (
+        <AppShellProvider value={props.contextValue}>
+          <AgentPanel />
+        </AppShellProvider>
+      ) : (
+        <FullAgentShell {...props} />
+      )}
     </EscapeInterruptProvider>
   )
 }
 
 /**
- * AppShellContent - Inner component that contains all the AppShell logic
- * Separated to allow useEscapeInterrupt hook to work (must be inside provider)
+ * Full Agent presentation with sidebar, navigator, and multi-panel workspace.
  */
-function AppShellContent({
+export function FullAgentShell({
   contextValue,
   defaultLayout = [20, 32, 48],
   defaultCollapsed = false,
@@ -537,7 +553,6 @@ function AppShellContent({
   } = contextValue
 
   const { t } = useTranslation()
-  const { isPanel, isFull } = useAgentPresentation()
 
   // Get hotkey labels from centralized action registry
   const newChatHotkey = useActionLabel('app.newChat').hotkey
@@ -565,9 +580,9 @@ function AppShellContent({
   const shellRef = useRef<HTMLDivElement>(null)
   const shellWidth = useContainerWidth(shellRef)
   const MOBILE_THRESHOLD = 768
-  const isAutoCompact = !isPanel && shellWidth > 0 && shellWidth < MOBILE_THRESHOLD
+  const isAutoCompact = shellWidth > 0 && shellWidth < MOBILE_THRESHOLD
 
-  const effectiveSidebarAndNavigatorHidden = isPanel || isSidebarAndNavigatorHidden || isAutoCompact
+  const effectiveSidebarAndNavigatorHidden = isSidebarAndNavigatorHidden || isAutoCompact
 
   // What's New overlay
   const [showWhatsNew, setShowWhatsNew] = React.useState(false)
@@ -1213,13 +1228,12 @@ function AppShellContent({
   })
 
   const handleToggleSidebar = useCallback(() => {
-    if (isPanel) return
     if (isSidebarAndNavigatorHidden) {
       setIsSidebarAndNavigatorHidden(false)
       return
     }
     setIsSidebarVisible(v => !v)
-  }, [isPanel, isSidebarAndNavigatorHidden])
+  }, [isSidebarAndNavigatorHidden])
 
   // Sidebar toggle (CMD+B)
   useAction('view.toggleSidebar', handleToggleSidebar)
@@ -2044,20 +2058,6 @@ function AppShellContent({
     setTimeout(() => focusZone('chat', { intent: 'programmatic' }), 50)
   }, [activeWorkspace, focusZone, navigate, resolveInheritedNewSessionParams])
 
-  // Create a brand new dedicated browser window and focus it.
-  // Intentionally unbound: this action should always create a NEW window.
-  const handleNewBrowserWindow = useCallback(async () => {
-    try {
-      const instanceId = await window.electronAPI.browserPane.create({
-        show: true,
-      })
-      await window.electronAPI.browserPane.focus(instanceId)
-    } catch (error) {
-      console.error('[Chat] Failed to create browser window:', error)
-      toast.error(t('toast.failedToCreateBrowser'))
-    }
-  }, [])
-
   // Delete Source - simplified since agents system is removed
   const handleDeleteSource = useCallback(async (sourceSlug: string) => {
     if (!activeWorkspace) return
@@ -2091,20 +2091,17 @@ function AppShellContent({
     handleNewChat()
   }, [menuNewChatTrigger, handleNewChat])
 
-  const shellCommandHandlerRef = useRef<(command: AgentShellCommand) => void>(() => {})
-  shellCommandHandlerRef.current = (command) => {
-    if (command === 'new-session') handleNewChat()
-    else if (command === 'open-settings') onOpenSettings()
-    else if (command === 'open-shortcuts') onOpenKeyboardShortcuts()
-    else if (command === 'toggle-sidebar') handleToggleSidebar()
-  }
-
   useEffect(() => {
-    const api = window.electronAPI
-    const unsubscribe = api.onAgentShellCommand(command => shellCommandHandlerRef.current(command))
-    void api.notifyAgentRendererReady()
-    return unsubscribe
-  }, [])
+    const handleCommand = (event: Event) => {
+      const command = (event as CustomEvent<AgentShellCommand>).detail
+      if (command === 'new-session') handleNewChat()
+      else if (command === 'open-settings') onOpenSettings()
+      else if (command === 'open-shortcuts') onOpenKeyboardShortcuts()
+      else if (command === 'toggle-sidebar') handleToggleSidebar()
+    }
+    window.addEventListener('agent-shell-command', handleCommand)
+    return () => window.removeEventListener('agent-shell-command', handleCommand)
+  }, [handleNewChat, onOpenSettings, onOpenKeyboardShortcuts, handleToggleSidebar])
 
   // Unified sidebar items: nav buttons only (agents system removed)
   type SidebarItem = {
@@ -2360,8 +2357,7 @@ function AppShellContent({
 
   return (
     <AppShellProvider value={appShellContextValue}>
-        {isFull && (
-          <div className="fixed left-2 right-2 top-2 z-[100] flex items-center justify-between pointer-events-none">
+        <div className="fixed left-2 right-2 top-2 z-[100] flex items-center justify-between pointer-events-none">
             <TopBarButton
               aria-label={t('menu.toggleSidebar')}
               isActive={!effectiveSidebarAndNavigatorHidden && isSidebarVisible}
@@ -2372,31 +2368,14 @@ function AppShellContent({
             </TopBarButton>
             <div className="pointer-events-auto flex min-w-0 items-center gap-1">
               <BrowserTabStrip activeSessionId={effectiveSessionId} maxVisibleBadges={3} />
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <TopBarButton aria-label={t('menu.addPanelMenu')} className="h-[26px] w-[26px] rounded-lg">
-                    <Plus className="h-4 w-4 text-foreground/50" strokeWidth={1.5} />
-                  </TopBarButton>
-                </DropdownMenuTrigger>
-                <StyledDropdownMenuContent align="end" minWidth="min-w-56">
-                  <StyledDropdownMenuItem onClick={() => handleNewChat(true)}>
-                    <SquarePenRounded className="h-3.5 w-3.5" />
-                    {t('session.newSessionInPanel')}
-                  </StyledDropdownMenuItem>
-                  <StyledDropdownMenuItem onClick={() => { void handleNewBrowserWindow() }}>
-                    <Globe className="h-3.5 w-3.5" />
-                    {t('browser.newWindow')}
-                  </StyledDropdownMenuItem>
-                </StyledDropdownMenuContent>
-              </DropdownMenu>
             </div>
-          </div>
-        )}
+        </div>
 
       {/* === OUTER LAYOUT: Unified Panel Stack | Right Sidebar === */}
       <div
         ref={shellRef}
-        data-agent-presentation={isPanel ? 'panel' : 'full'}
+        data-agent-presentation="full"
+        data-agent-component="full"
         className="flex items-stretch relative"
         style={{
           height: '100%',
@@ -3628,7 +3607,6 @@ function AppShellContent({
           isSidebarAndNavigatorHidden={effectiveSidebarAndNavigatorHidden}
           isRightSidebarVisible={false}
           isCompact={isAutoCompact}
-          focusedOnly={isPanel}
           isResizing={!!isResizing}
         />
 

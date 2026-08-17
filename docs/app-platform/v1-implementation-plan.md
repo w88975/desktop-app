@@ -116,8 +116,9 @@ panel                  --Close--> hidden(panel)
 full                   --Close--> current Agent close-session behavior
 ```
 
-Mode changes resize same Agent view. No navigation, reload, remount, or duplicate
-Agent renderer.
+Mode changes resize the same Agent `<webview>` and switch between dedicated
+`AgentPanel` and `FullAgentShell` React components. No guest navigation, reload,
+or duplicate Agent renderer occurs; business data remains in shared stores.
 
 ## Agent extraction
 
@@ -126,7 +127,8 @@ Agent renderer.
 3. Full mode preserves current layout beneath `TopBar`.
 4. Move Workspace selector to top of full Agent sidebar, above New Session.
 5. Put Agent sidebar-toggle control inside full Agent UI.
-6. Panel mode hides sidebar, session list, and navigator; render current chat.
+6. Panel mode mounts dedicated `AgentPanel`; render current chat without mounting
+   full sidebar, navigator, or multi-panel layout.
 7. Replace chat-header Share control with panel/full toggle.
 8. Keep chat-header Close behavior mode-sensitive.
 9. Do not add panel New Conversation control.

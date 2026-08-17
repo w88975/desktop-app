@@ -1,10 +1,21 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import { Bot, ChevronLeft, ChevronRight, Home, Keyboard, ListTodo, Settings, X } from 'lucide-react'
-import type { ShellState, WebviewSurfaceBootstrap } from '../shared/app-platform'
+import { AGENT_PANEL_DEFAULT_RATIO, type ShellState, type WebviewSurfaceBootstrap } from '../shared/app-platform'
 import { CraftAgentsSymbol } from './components/icons/CraftAgentsSymbol'
 import { SquarePenRounded } from './components/icons/SquarePenRounded'
 import { TopBarButton } from './components/ui/TopBarButton'
+import { useResizeGradient } from './hooks/useResizeGradient'
+import {
+  PANEL_EDGE_INSET,
+  PANEL_GAP,
+  PANEL_SASH_HALF_HIT_WIDTH,
+  PANEL_SASH_HIT_WIDTH,
+  PANEL_SASH_LINE_WIDTH,
+  PANEL_STACK_VERTICAL_OVERFLOW,
+  RADIUS_EDGE,
+  RADIUS_INNER,
+} from './components/app-shell/panel-constants'
 import './index.css'
 import './shell.css'
 
@@ -91,6 +102,39 @@ function AppLogoMenu() {
   )
 }
 
+function ShellResizeSash({ panelWidth }: { panelWidth: number }) {
+  const { ref, handlers, gradientStyle } = useResizeGradient()
+  const right = panelWidth + PANEL_EDGE_INSET + (PANEL_GAP / 2) - PANEL_SASH_HALF_HIT_WIDTH
+
+  return (
+    <div
+      ref={ref}
+      className="splitter no-drag"
+      style={{
+        right,
+        width: PANEL_SASH_HIT_WIDTH,
+        top: PANEL_STACK_VERTICAL_OVERFLOW,
+        bottom: PANEL_EDGE_INSET + PANEL_STACK_VERTICAL_OVERFLOW,
+      }}
+      onMouseMove={handlers.onMouseMove}
+      onMouseLeave={handlers.onMouseLeave}
+      onPointerDown={(event) => {
+        handlers.onMouseDown()
+        document.documentElement.dataset.resizing = 'true'
+        event.currentTarget.setPointerCapture(event.pointerId)
+      }}
+      onDoubleClick={() => {
+        void window.shellAPI.setPanelWidth(window.innerWidth * AGENT_PANEL_DEFAULT_RATIO)
+      }}
+    >
+      <div
+        className="splitter-line"
+        style={{ ...gradientStyle, width: PANEL_SASH_LINE_WIDTH }}
+      />
+    </div>
+  )
+}
+
 function Shell() {
   const [state, setState] = useState<ShellState>(EMPTY_STATE)
   const [bootstrap, setBootstrap] = useState<WebviewSurfaceBootstrap | null>(null)
@@ -134,20 +178,27 @@ function Shell() {
 
   const panelVisible = state.agent.visible && state.agent.lastMode === 'panel'
   const fullVisible = state.agent.visible && state.agent.lastMode === 'full'
+  const fullSized = state.agent.lastMode === 'full'
 
   return (
     <main
       className="shell-root"
       data-agent-visible={state.agent.visible || undefined}
       data-agent-mode={state.agent.lastMode}
-      style={{ '--agent-panel-width': `${state.agent.panelWidthPx}px` } as React.CSSProperties}
+      style={{
+        '--agent-panel-width': `${state.agent.panelWidthPx}px`,
+        '--panel-gap': `${PANEL_GAP}px`,
+        '--panel-edge-inset': `${PANEL_EDGE_INSET}px`,
+        '--radius-edge': `${RADIUS_EDGE}px`,
+        '--radius-inner': `${RADIUS_INNER}px`,
+      } as React.CSSProperties}
     >
       <header className="titlebar">
         <div className="no-drag"><AppLogoMenu /></div>
         <TopBarButton aria-label="Back"><ChevronLeft className="h-[18px] w-[18px]" strokeWidth={1.5} /></TopBarButton>
         <TopBarButton aria-label="Forward"><ChevronRight className="h-[18px] w-[18px]" strokeWidth={1.5} /></TopBarButton>
         <button
-          className={`home-tab no-drag ${state.activeTabId === null ? 'active' : ''}`}
+          className={`home-tab no-drag ${!fullVisible && state.activeTabId === null ? 'active' : ''}`}
           onClick={() => void window.shellAPI.activateHome()}
         >
           <Home size={15} /><span>Home</span>
@@ -156,7 +207,7 @@ function Shell() {
           {state.tabs.map(tab => (
             <button
               key={tab.id}
-              className={`app-tab ${state.activeTabId === tab.id ? 'active' : ''}`}
+              className={`app-tab ${!fullVisible && state.activeTabId === tab.id ? 'active' : ''}`}
               onClick={() => void window.shellAPI.activateTab(tab.id)}
             >
               <span>{tab.title}</span>
@@ -206,18 +257,12 @@ function Shell() {
             src={bootstrap.agentSrc}
             preload={bootstrap.agentPreload}
             ariaLabel="Agent"
-            className={`surface-webview agent-surface ${panelVisible ? 'agent-panel-visible' : ''} ${fullVisible ? 'agent-full-visible' : ''}`}
+            className={`surface-webview agent-surface ${fullSized ? 'agent-full-sized' : ''} ${panelVisible ? 'agent-panel-visible' : ''} ${fullVisible ? 'agent-full-visible' : ''}`}
           />
         )}
 
         {panelVisible && (
-          <div
-            className="splitter no-drag"
-            onPointerDown={(event) => {
-              document.documentElement.dataset.resizing = 'true'
-              event.currentTarget.setPointerCapture(event.pointerId)
-            }}
-          />
+          <ShellResizeSash panelWidth={state.agent.panelWidthPx} />
         )}
       </section>
     </main>

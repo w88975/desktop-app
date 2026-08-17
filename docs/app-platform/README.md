@@ -56,6 +56,12 @@ into a multi-app desktop shell.
 - In Agent full mode, active app keeps full content-region bounds and continues
   running. Agent view is stacked above it; shell title bar remains above both.
   Hiding Agent reveals app without resize or reflow.
+- While Full Agent is visible, Home and app tabs do not show active styling.
+  Activating Home or an app tab hides Full Agent immediately and activates the
+  selected content. Panel Agent remains visible when content tabs change.
+- Hidden Agent retains bounds for its `lastMode`. In particular, hidden Full
+  Agent stays full-width so reopening does not paint a compact intermediate
+  layout or trigger a second layout pass.
 - Home is fixed and non-closable. App tabs are closable. Closing destroys that
   tab renderer. If active tab closes, shell activates nearest tab to its left,
   falling back to Home. Reopening singleton app creates fresh renderer state.
@@ -96,9 +102,11 @@ acceptance criteria.
 
 ## Closed decisions
 
-- Agent panel mode and full mode reuse one persistent Agent `<webview>`. Shell
-  CSS changes its bounds and main sends presentation mode; no second Agent
-  renderer is created or synchronized.
+- Agent panel mode and full mode reuse one persistent Agent `<webview>`, but use
+  separate React presentation components: `AgentPanel` renders current chat
+  only; `FullAgentShell` owns sidebar, navigator, and multi-panel layout. Both
+  consume the same Jotai/AppShellContext/transport state. No second Agent
+  renderer or duplicated business state is created.
 - Home and every open app tab own distinct persistent `<webview>` guests. Tab
   switching changes CSS visibility without reloading. Agent coverage does not
   unmount active content. Memory-pressure eviction is deferred.
@@ -113,6 +121,9 @@ acceptance criteria.
 - Agent panel width is resizable. Default is 40% of content region, minimum is
   360px, maximum is 70%, and width persists per shell window. Splitter belongs
   to shell renderer, not Agent or active app renderer.
+- Shell content surfaces reuse Agent panel-system geometry: shared edge inset,
+  inter-panel gap, inner/edge corner radii, and cursor-following resize sash.
+  Double-clicking the App/Agent sash restores the default 40% panel width.
 - Narrow windows do not auto-switch Agent to full mode. Panel and app each keep
   360px minimum; shell window minimum width provides required room. Only an
   explicit user action changes panel/full mode.

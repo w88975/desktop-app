@@ -263,7 +263,7 @@ export class ShellViewManager {
 
   activateHome(): void {
     this.activeTabId = null
-    this.emitState()
+    this.finishContentActivation()
   }
 
   openApp(appId: string): void {
@@ -287,12 +287,21 @@ export class ShellViewManager {
     }
     this.tabs.push({ tab, definition, webContents: null })
     this.activeTabId = tabId
-    this.emitState()
+    this.finishContentActivation()
   }
 
   activateTab(tabId: string): void {
     if (!this.tabs.some(item => item.tab.id === tabId)) throw new Error(`Unknown app tab: ${tabId}`)
     this.activeTabId = tabId
+    this.finishContentActivation()
+  }
+
+  private finishContentActivation(): void {
+    if (this.agentState.visible && this.agentState.lastMode === 'full') {
+      this.agentState = { ...this.agentState, visible: false }
+      this.emitAllState()
+      return
+    }
     this.emitState()
   }
 
