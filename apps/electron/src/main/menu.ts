@@ -6,6 +6,7 @@ import type { MenuItem } from '../shared/menu-schema'
 import type { WindowManager } from './window-manager'
 import type { EventSink } from '@craft-agent/server-core/transport'
 import { mainLog, isDebugMode } from './logger'
+import { DOCS_HOME } from '@craft-agent/shared/docs/doc-links'
 
 type ClientResolver = (webContentsId: number) => string | undefined
 
@@ -234,7 +235,7 @@ export async function rebuildMenu(): Promise<void> {
       submenu: [
         {
           label: i18n.t("menu.helpAndDocs"),
-          click: () => shell.openExternal('https://agents.craft.do/docs')
+          click: () => shell.openExternal(DOCS_HOME)
         },
         {
           label: i18n.t("menu.keyboardShortcuts"),

@@ -3,7 +3,21 @@
  * Summaries provide quick context; "Learn more" opens the full docs.
  */
 
-const DOC_BASE_URL = 'https://agents.craft.do/docs'
+/**
+ * Documentation site root. Single source of truth for every in-app doc link —
+ * do not hardcode doc URLs anywhere else.
+ */
+export const DOCS_HOME = 'https://docs-aiadp.hxsyai.com/'
+
+/**
+ * Whether the docs site serves the per-feature deep paths declared in `DOCS`.
+ *
+ * The site currently only has a landing page, so every link resolves to
+ * `DOCS_HOME`. The `path` values below are kept intact: once the site ships
+ * these routes, flip this to `true` and deep links start working — no other
+ * change needed.
+ */
+const DOCS_DEEP_LINKS_ENABLED = false
 
 export type DocFeature =
   | 'sources'
@@ -20,6 +34,7 @@ export type DocFeature =
   | 'preferences'
   | 'automations'
   | 'messaging'
+  | 'sharing'
 
 export interface DocInfo {
   /** Path relative to DOC_BASE_URL */
@@ -115,13 +130,22 @@ export const DOCS: Record<DocFeature, DocInfo> = {
     summary:
       'Connect a session to a chat platform — Telegram, WhatsApp, or Lark / Feishu — and reach your agent from anywhere. Pair workspace supergroups, route automations to forum topics, and send rich replies natively.',
   },
+  sharing: {
+    path: '/go-further/sharing',
+    title: 'Sharing',
+    summary:
+      'Publish a read-only snapshot of a session so others can follow along. Shared links stay in sync until you stop sharing.',
+  },
 }
 
 /**
- * Get the full documentation URL for a feature
+ * Get the full documentation URL for a feature.
+ *
+ * Falls back to the docs home page while `DOCS_DEEP_LINKS_ENABLED` is off.
  */
 export function getDocUrl(feature: DocFeature): string {
-  return `${DOC_BASE_URL}${DOCS[feature].path}`
+  if (!DOCS_DEEP_LINKS_ENABLED) return DOCS_HOME
+  return `${DOCS_HOME.replace(/\/$/, '')}${DOCS[feature].path}`
 }
 
 /**
