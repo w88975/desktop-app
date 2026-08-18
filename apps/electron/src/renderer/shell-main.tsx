@@ -13,7 +13,6 @@ import { TopBarButton } from './components/ui/TopBarButton'
 import { useResizeGradient } from './hooks/useResizeGradient'
 import {
   PANEL_EDGE_INSET,
-  PANEL_GAP,
   PANEL_SASH_HALF_HIT_WIDTH,
   PANEL_SASH_HIT_WIDTH,
   PANEL_SASH_LINE_WIDTH,
@@ -23,6 +22,9 @@ import {
 } from './components/app-shell/panel-constants'
 import './index.css'
 import './shell.css'
+
+const APP_REGION_INSET = 8
+const DISMISS_SHELL_OVERLAYS_EVENT = 'shell-dismiss-overlays'
 
 const EMPTY_STATE: ShellState = {
   activeTarget: { kind: 'home' },
@@ -47,7 +49,18 @@ interface SurfaceWebviewProps {
 }
 
 function SurfaceWebview({ src, preload, className, ariaLabel, partition }: SurfaceWebviewProps) {
+  const ref = useRef<Electron.WebviewTag | null>(null)
+
+  useEffect(() => {
+    const webview = ref.current
+    if (!webview) return
+    const dismissShellOverlays = () => window.dispatchEvent(new Event(DISMISS_SHELL_OVERLAYS_EVENT))
+    webview.addEventListener('focus', dismissShellOverlays)
+    return () => webview.removeEventListener('focus', dismissShellOverlays)
+  }, [])
+
   return React.createElement('webview', {
+    ref,
     src,
     preload,
     className,
@@ -68,11 +81,16 @@ function AppLogoMenu() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setOpen(false)
     }
+    const dismissShellOverlays = () => setOpen(false)
     window.addEventListener('pointerdown', onPointerDown)
     window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('blur', dismissShellOverlays)
+    window.addEventListener(DISMISS_SHELL_OVERLAYS_EVENT, dismissShellOverlays)
     return () => {
       window.removeEventListener('pointerdown', onPointerDown)
       window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('blur', dismissShellOverlays)
+      window.removeEventListener(DISMISS_SHELL_OVERLAYS_EVENT, dismissShellOverlays)
     }
   }, [open])
 
@@ -87,20 +105,27 @@ function AppLogoMenu() {
         <CraftAgentsSymbol className="h-4 text-accent" />
       </TopBarButton>
       {open && (
-        <div className="app-logo-menu popover-styled" role="menu">
-          <button role="menuitem" onClick={() => run(() => { void window.shellAPI.sendAgentCommand('new-session') })}>
-            <SquarePenRounded className="h-3.5 w-3.5" />
-            New Session
-          </button>
-          <button role="menuitem" onClick={() => run(() => { void window.shellAPI.sendAgentCommand('open-settings') })}>
-            <Settings className="h-3.5 w-3.5" />
-            Settings
-          </button>
-          <button role="menuitem" onClick={() => run(() => { void window.shellAPI.sendAgentCommand('open-shortcuts') })}>
-            <Keyboard className="h-3.5 w-3.5" />
-            Keyboard Shortcuts
-          </button>
-        </div>
+        <>
+          <div
+            className="app-logo-menu-dismiss-layer"
+            aria-hidden="true"
+            onPointerDown={() => setOpen(false)}
+          />
+          <div className="app-logo-menu popover-styled" role="menu">
+            <button role="menuitem" onClick={() => run(() => { void window.shellAPI.sendAgentCommand('new-session') })}>
+              <SquarePenRounded className="h-3.5 w-3.5" />
+              New Session
+            </button>
+            <button role="menuitem" onClick={() => run(() => { void window.shellAPI.sendAgentCommand('open-settings') })}>
+              <Settings className="h-3.5 w-3.5" />
+              Settings
+            </button>
+            <button role="menuitem" onClick={() => run(() => { void window.shellAPI.sendAgentCommand('open-shortcuts') })}>
+              <Keyboard className="h-3.5 w-3.5" />
+              Keyboard Shortcuts
+            </button>
+          </div>
+        </>
       )}
     </div>
   )
@@ -108,7 +133,7 @@ function AppLogoMenu() {
 
 function ShellResizeSash({ panelWidth }: { panelWidth: number }) {
   const { ref, handlers, gradientStyle } = useResizeGradient()
-  const right = panelWidth + PANEL_EDGE_INSET + (PANEL_GAP / 2) - PANEL_SASH_HALF_HIT_WIDTH
+  const right = panelWidth + PANEL_EDGE_INSET + (APP_REGION_INSET / 2) - PANEL_SASH_HALF_HIT_WIDTH
 
   return (
     <div
@@ -218,8 +243,8 @@ function Shell() {
       data-agent-mode={fullVisible ? 'full' : panelVisible ? 'panel' : 'hidden'}
       style={{
         '--agent-panel-width': `${state.agentPanelWidthPx}px`,
-        '--panel-gap': `${PANEL_GAP}px`,
         '--panel-edge-inset': `${PANEL_EDGE_INSET}px`,
+        '--app-region-inset': `${APP_REGION_INSET}px`,
         '--radius-edge': `${RADIUS_EDGE}px`,
         '--radius-inner': `${RADIUS_INNER}px`,
       } as React.CSSProperties}

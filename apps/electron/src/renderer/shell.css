@@ -42,6 +42,13 @@ button { font: inherit; color: inherit; }
   position: relative;
 }
 
+.app-logo-menu-dismiss-layer {
+  position: fixed;
+  z-index: 390;
+  inset: 0;
+  -webkit-app-region: no-drag;
+}
+
 .app-logo-menu {
   position: absolute;
   z-index: 400;
@@ -218,15 +225,12 @@ button { font: inherit; color: inherit; }
 
 .app-region {
   position: absolute;
-  top: 0;
-  right: var(--panel-edge-inset);
-  bottom: var(--panel-edge-inset);
-  left: var(--panel-edge-inset);
+  inset: var(--app-region-inset);
   min-width: 0;
 }
 
 .app-region.with-agent-panel {
-  right: calc(var(--agent-panel-width) + var(--panel-edge-inset) + var(--panel-gap));
+  right: calc(var(--agent-panel-width) + var(--panel-edge-inset) + var(--app-region-inset));
 }
 
 .app-region.panel-transition {
