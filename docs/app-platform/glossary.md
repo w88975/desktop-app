@@ -35,8 +35,9 @@ exists only while at least one dynamic app tab is open.
 Installable or built-in web application exposed through one or more tabs. TODO
 is example app module. Agent behaves as fixed tab application but is not a
 dynamic `AppDefinition` module and owns no separate tab renderer. Module manifest
-declares whether it permits one tab or multiple tab instances. Version 1 app
-modules are built-in, locally packaged, and first-party only.
+declares whether it permits one tab or multiple tab instances. PWA App v1
+supports Builtin, Local, and controlled Remote singleton apps through one
+registry/runtime model.
 
 ## Capability allowlist
 
@@ -80,7 +81,8 @@ Agent full mode covers it. Covered app keeps full bounds and continues running.
 ## Home
 
 Fixed, non-closable content entry with its own persistent renderer. Version 1
-contains only a text placeholder; product functions are deferred.
+contains the Builtin/Local/Remote PWA launcher. Store, search, categories, and
+other product features remain deferred.
 
 ## Agent
 

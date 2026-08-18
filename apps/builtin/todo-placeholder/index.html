@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TODO</title>
+    <link rel="stylesheet" href="./app.css" />
+  </head>
+  <body>
+    <main class="todo-shell">
+      <header>
+        <div>
+          <h1>TODO</h1>
+          <p id="summary">0 个待办事项</p>
+        </div>
+        <button id="open-agent" class="secondary-button" type="button">打开 Agent Panel</button>
+      </header>
+
+      <form id="create-form">
+        <input id="todo-title" name="title" autocomplete="off" maxlength="200" placeholder="添加待办事项..." />
+        <button type="submit">添加</button>
+      </form>
+
+      <section id="empty-state" class="empty-state">
+        <img src="./icon.svg" alt="" />
+        <h2>没有待办事项</h2>
+        <p>输入内容，创建第一条待办。</p>
+      </section>
+      <ul id="todo-list" aria-label="待办事项"></ul>
+    </main>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

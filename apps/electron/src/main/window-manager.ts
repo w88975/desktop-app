@@ -12,6 +12,7 @@ import { SurfaceRegistry } from './surface-registry'
 import type { SurfaceKind } from '../shared/app-platform'
 import type { SurfaceRegistration } from '../shared/app-platform'
 import { ShellViewManager } from './shell-view-manager'
+import type { ExternalAppRegistry } from './external-app-registry'
 
 // Vite dev server URL for hot reload
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
@@ -68,6 +69,8 @@ export class WindowManager {
   private keyboardCloseIntents: Set<number> = new Set()  // webContents.id flagged by Cmd/Ctrl+W before close
   private keyboardCloseIntentTimeouts: Map<number, NodeJS.Timeout> = new Map()  // Auto-clear stale keyboard-close intents
   private isAppQuitting = false  // Skip layered close interception during app quit
+
+  constructor(private readonly externalAppRegistry: ExternalAppRegistry) {}
 
   private resolveShellWebContentsId(webContentsId: number): number {
     return this.surfaces.getShellWebContentsId(webContentsId) ?? webContentsId
@@ -335,8 +338,9 @@ export class WindowManager {
       window,
       workspaceId,
       initialActiveTarget: focused || !workspaceId ? 'agent' : 'home',
-      registerSurface: (surfaceWebContentsId, kind, tabId) => {
-        this.registerSurface(webContentsId, surfaceWebContentsId, kind, tabId)
+      externalAppRegistry: this.externalAppRegistry,
+      registerSurface: (surfaceWebContentsId, kind, tabId, appId) => {
+        this.registerSurface(webContentsId, surfaceWebContentsId, kind, tabId, appId)
       },
       unregisterSurface: surfaceWebContentsId => {
         this.unregisterSurface(surfaceWebContentsId)
@@ -345,7 +349,7 @@ export class WindowManager {
     this.shellViews.set(webContentsId, shellViewManager)
 
     window.webContents.on('will-attach-webview', (event, webPreferences, params) => {
-      if (!shellViewManager.authorizeGuest(params.src, webPreferences)) {
+      if (!shellViewManager.authorizeGuest(params.src, webPreferences, params.partition)) {
         event.preventDefault()
         windowLog.warn(`[app-platform] Blocked unauthorized webview attachment: ${params.src}`)
       }
@@ -710,7 +714,8 @@ export class WindowManager {
     shellWebContentsId: number,
     webContentsId: number,
     kind: Exclude<SurfaceKind, 'shell'>,
-    tabId?: string
+    tabId?: string,
+    appId?: string
   ): void {
     const managed = this.windows.get(shellWebContentsId)
     if (!managed) {
@@ -723,6 +728,7 @@ export class WindowManager {
       workspaceId: managed.workspaceId,
       kind,
       tabId,
+      appId,
     })
   }
 

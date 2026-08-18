@@ -179,7 +179,17 @@ button { font: inherit; color: inherit; }
   max-width: 190px;
   flex: none;
 }
-.app-tab > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.app-tab-title { overflow: hidden; text-overflow: ellipsis; }
+
+.app-tab-icon,
+.app-tab-icon-placeholder {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  object-fit: contain;
+}
+
+.app-tab-icon-placeholder { color: var(--muted-foreground); }
 
 .tab-close {
   -webkit-app-region: no-drag;
@@ -249,6 +259,65 @@ html[data-resizing="true"] .app-region {
   visibility: visible;
   pointer-events: auto;
 }
+
+.app-status-surface {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: var(--radius-inner) var(--radius-inner) var(--radius-edge) var(--radius-edge);
+  background: var(--background);
+  box-shadow: var(--shadow-middle);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.app-status-surface.surface-active {
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.app-status-content {
+  display: flex;
+  max-width: 420px;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+.app-status-content h2 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.app-status-content p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.app-status-content button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--background);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.app-status-content button:hover { background: color-mix(in srgb, var(--foreground) 5%, transparent); }
+
+.app-status-spinner { animation: app-status-spin 800ms linear infinite; }
+
+@keyframes app-status-spin { to { transform: rotate(360deg); } }
 
 .agent-surface {
   top: 0;

@@ -28,6 +28,7 @@ describe('SurfaceRegistry', () => {
       workspaceId: 'ws-1',
       kind: 'app',
       tabId: 'todo-tab',
+      appId: 'todo-placeholder',
     })
 
     expect(registry.getShellWebContentsId(4)).toBe(1)

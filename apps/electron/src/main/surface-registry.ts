@@ -22,6 +22,12 @@ export class SurfaceRegistry {
     if (registration.kind === 'app' && !registration.tabId) {
       throw new Error('App surface requires tabId')
     }
+    if (registration.kind !== 'app' && registration.appId !== undefined) {
+      throw new Error(`Only app surfaces may declare appId`)
+    }
+    if (registration.kind === 'app' && !registration.appId) {
+      throw new Error('App surface requires appId')
+    }
 
     this.surfaces.set(registration.webContentsId, { ...registration })
   }

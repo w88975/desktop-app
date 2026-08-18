@@ -1,14 +1,24 @@
 import { describe, expect, it } from 'bun:test'
-import { BUILT_IN_APPS } from '../../shared/app-platform'
+import type { AppDefinition } from '../../shared/app-platform'
 import { ShellTabManager } from '../shell-tab-manager'
 
 function createManager(initialActiveTarget: 'home' | 'agent' = 'home') {
   return new ShellTabManager({ initialActiveTarget, panelWidthPx: 560 })
 }
 
+const TEST_APP: AppDefinition = {
+  id: 'todo-placeholder',
+  title: 'TODO',
+  entry: 'hxsy-app://todo-placeholder/index.html',
+  kind: 'external',
+  instancePolicy: 'single',
+  capabilities: [],
+  status: 'ready',
+}
+
 function openTodo(manager: ShellTabManager, id = 'todo-1') {
   return manager.openAppTab({
-    definition: BUILT_IN_APPS.TODO_PLACEHOLDER,
+    definition: TEST_APP,
     tabId: id,
     webContentsId: -1,
   }).value.tab
@@ -18,12 +28,12 @@ describe('ShellTabManager 原子事务', () => {
   it('创建 singleton app，重复打开只激活现有 tab', () => {
     const manager = createManager()
     const first = manager.openAppTab({
-      definition: BUILT_IN_APPS.TODO_PLACEHOLDER,
+      definition: TEST_APP,
       tabId: 'todo-1',
       webContentsId: -1,
     }).value
     const second = manager.openAppTab({
-      definition: BUILT_IN_APPS.TODO_PLACEHOLDER,
+      definition: TEST_APP,
       tabId: 'todo-2',
       webContentsId: -2,
     }).value
@@ -74,6 +84,19 @@ describe('ShellTabManager 原子事务', () => {
     })
   })
 
+  it('External App bridge 可从 Full 幂等确保 Agent Panel 打开', () => {
+    const manager = createManager()
+    const todo = openTodo(manager)
+    manager.focusAgentTab()
+    manager.ensureAgentPanelVisible()
+    expect(manager.getState()).toMatchObject({
+      activeTarget: { kind: 'app', tabId: todo.id },
+      agentPanelVisible: true,
+    })
+    manager.ensureAgentPanelVisible()
+    expect(manager.getState().agentPanelVisible).toBe(true)
+  })
+
   it('关闭 previous content 后回退最右 tab，再回 Home', () => {
     const manager = createManager()
     const todo = openTodo(manager)
@@ -103,11 +126,19 @@ describe('ShellTabManager 原子事务', () => {
   it('返回快照不能修改 manager 内部状态', () => {
     const manager = createManager()
     const snapshot = manager.getState()
-    snapshot.tabs.push({ id: 'bad', appId: 'bad', title: 'bad', webContentsId: -9 })
+    snapshot.tabs.push({
+      id: 'bad',
+      appId: 'bad',
+      title: 'bad',
+      webContentsId: -9,
+      kind: 'external',
+      entry: '',
+      status: 'error',
+    })
     expect(manager.getState().tabs).toEqual([])
 
     const opened = manager.openAppTab({
-      definition: BUILT_IN_APPS.TODO_PLACEHOLDER,
+      definition: TEST_APP,
       tabId: 'todo-1',
       webContentsId: -1,
     }).value

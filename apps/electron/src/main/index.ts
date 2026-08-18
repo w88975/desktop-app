@@ -3,8 +3,8 @@
 import { loadShellEnv } from './shell-env'
 loadShellEnv()
 
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, nativeTheme, shell } from 'electron'
-import { APP_PLATFORM_CHANNELS, type AgentShellCommand } from '../shared/app-platform'
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, nativeTheme, net, shell } from 'electron'
+import { APP_PLATFORM_CHANNELS, type AgentShellCommand, type SurfaceKind } from '../shared/app-platform'
 import { createHash, randomUUID } from 'crypto'
 import { hostname, homedir } from 'os'
 import * as Sentry from '@sentry/electron/main'
@@ -112,6 +112,8 @@ import { handleDeepLink } from './deep-link'
 import { BrowserPaneManager } from './browser-pane-manager'
 import { OAuthFlowStore } from '@craft-agent/shared/auth'
 import { registerThumbnailScheme, registerThumbnailHandler } from './thumbnail-protocol'
+import { ExternalAppRegistry } from './external-app-registry'
+import { registerExternalAppProtocol, registerExternalAppScheme } from './external-app-protocol'
 import log, { isDebugMode, mainLog, getLogFilePath, getMessagingGatewayLogFilePath, messagingGatewayLog, autoUpdateLog } from './logger'
 import { setPerfEnabled, enableDebug } from '@craft-agent/shared/utils'
 import { registerPiModelResolver } from '@craft-agent/shared/config'
@@ -211,6 +213,7 @@ const DEEPLINK_SCHEME = process.env.CRAFT_DEEPLINK_SCHEME || 'craftagents'
 let windowManager: WindowManager | null = null
 let sessionManager: SessionManager | null = null
 let browserPaneManager: BrowserPaneManager | null = null
+let externalAppRegistry: ExternalAppRegistry | null = null
 let oauthFlowStore: OAuthFlowStore | null = null
 let moduleSink: EventSink | null = null
 let moduleClientResolver: ((webContentsId: number) => string | undefined) | null = null
@@ -285,6 +288,7 @@ if (process.env.CRAFT_SERVER_URL) {
 // Register thumbnail:// custom protocol for file preview thumbnails in the sidebar.
 // Must happen before app.whenReady() — Electron requires early scheme registration.
 registerThumbnailScheme()
+registerExternalAppScheme()
 
 // Handle deeplink on macOS (when app is already running)
 app.on('open-url', (event, url) => {
@@ -454,8 +458,19 @@ app.whenReady().then(async () => {
   }
 
   try {
+    externalAppRegistry = new ExternalAppRegistry({
+      rootPath: process.env.HXSY_APPS_DIR || join(app.getPath('userData'), 'apps'),
+      builtinRootPath: app.isPackaged
+        ? join(process.resourcesPath, 'app', 'builtin')
+        : join(__dirname, '..', '..', 'builtin'),
+      fetcher: net.fetch as typeof fetch,
+      onError: (message, error) => mainLog.warn(message, error),
+    })
+    await externalAppRegistry.initialize()
+    registerExternalAppProtocol(externalAppRegistry)
+
     // Initialize window manager
-    windowManager = new WindowManager()
+    windowManager = new WindowManager(externalAppRegistry)
 
     // Create the application menu (needs windowManager for New Window action)
     createApplicationMenu(windowManager)
@@ -499,9 +514,9 @@ app.whenReady().then(async () => {
       e.returnValue = windowManager?.getWorkspaceForWindow(e.sender.id) ?? ''
     })
 
-    const getShellViews = (senderId: number, allowedKinds: Array<'shell' | 'agent'>) => {
+    const getShellViews = (senderId: number, allowedKinds: SurfaceKind[]) => {
       const surface = windowManager?.getSurfaceRegistration(senderId)
-      if (!surface || !allowedKinds.includes(surface.kind as 'shell' | 'agent')) {
+      if (!surface || !allowedKinds.includes(surface.kind)) {
         throw new Error(`Surface ${senderId} cannot use app-platform control IPC`)
       }
       const manager = windowManager?.getShellViewManager(senderId)
@@ -519,7 +534,7 @@ app.whenReady().then(async () => {
       getShellViews(event.sender.id, ['shell']).activateHome()
     )
     ipcMain.handle(APP_PLATFORM_CHANNELS.OPEN_APP, (event, appId: string) =>
-      getShellViews(event.sender.id, ['shell']).openApp(appId)
+      getShellViews(event.sender.id, ['shell', 'home']).openApp(appId)
     )
     ipcMain.handle(APP_PLATFORM_CHANNELS.ACTIVATE_TAB, (event, tabId: string) =>
       getShellViews(event.sender.id, ['shell']).activateTab(tabId)
@@ -547,6 +562,46 @@ app.whenReady().then(async () => {
     )
     ipcMain.handle(APP_PLATFORM_CHANNELS.AGENT_RENDERER_READY, event =>
       getShellViews(event.sender.id, ['agent']).markAgentRendererReady(event.sender.id)
+    )
+    ipcMain.handle(APP_PLATFORM_CHANNELS.LIST_INSTALLED_APPS, event =>
+      getShellViews(event.sender.id, ['home']).getInstalledApps()
+    )
+    ipcMain.handle(APP_PLATFORM_CHANNELS.OPEN_APPS_DIRECTORY, async event => {
+      getShellViews(event.sender.id, ['home'])
+      if (!externalAppRegistry) throw new Error('External App registry is unavailable')
+      const error = await shell.openPath(externalAppRegistry.getRootPath())
+      if (error) throw new Error(error)
+    })
+    ipcMain.handle(APP_PLATFORM_CHANNELS.RESCAN_EXTERNAL_APPS, async event => {
+      getShellViews(event.sender.id, ['home'])
+      if (!externalAppRegistry) throw new Error('External App registry is unavailable')
+      await externalAppRegistry.scan()
+    })
+    ipcMain.handle(APP_PLATFORM_CHANNELS.RETRY_EXTERNAL_APP, async (event, appId: string) => {
+      const manager = getShellViews(event.sender.id, ['shell', 'home'])
+      await manager.retryExternalApp(appId)
+    })
+
+    const getExternalAppManager = (senderId: number) => {
+      const surface = windowManager?.getSurfaceRegistration(senderId)
+      if (!surface || surface.kind !== 'app' || !surface.appId || !externalAppRegistry?.get(surface.appId)) {
+        throw new Error(`Surface ${senderId} cannot use External App bridge IPC`)
+      }
+      const manager = windowManager?.getShellViewManager(senderId)
+      if (!manager) throw new Error(`No shell view manager for surface ${senderId}`)
+      return manager
+    }
+
+    ipcMain.handle(APP_PLATFORM_CHANNELS.EXTERNAL_GET_APP_NAME, event => {
+      getExternalAppManager(event.sender.id)
+      return app.getName()
+    })
+    ipcMain.handle(APP_PLATFORM_CHANNELS.EXTERNAL_GET_APP_VERSION, event => {
+      getExternalAppManager(event.sender.id)
+      return app.getVersion()
+    })
+    ipcMain.handle(APP_PLATFORM_CHANNELS.EXTERNAL_OPEN_AGENT_PANEL, event =>
+      getExternalAppManager(event.sender.id).openAgentPanel()
     )
 
     // Transport diagnostics bridge — preload reports remote WS connection state changes
@@ -1322,6 +1377,7 @@ app.on('before-quit', async (event) => {
 
   // Ensure Cmd+Q/app quit bypasses layered window close interception (Cmd+W behavior).
   windowManager?.setAppQuitting(true)
+  externalAppRegistry?.destroy()
 
   if (windowManager) {
     const windows = windowManager.getWindowStates()

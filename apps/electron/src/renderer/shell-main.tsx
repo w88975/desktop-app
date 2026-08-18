@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import ReactDOM from 'react-dom/client'
-import { Bot, ChevronLeft, ChevronRight, Home, Keyboard, ListTodo, Settings, X } from 'lucide-react'
+import { AppWindow, Bot, ChevronLeft, ChevronRight, Home, Keyboard, LoaderCircle, RotateCw, Settings, X } from 'lucide-react'
 import {
   AGENT_PANEL_DEFAULT_RATIO,
   getActiveContentTabId,
@@ -43,14 +43,16 @@ interface SurfaceWebviewProps {
   preload: string
   className: string
   ariaLabel: string
+  partition?: string
 }
 
-function SurfaceWebview({ src, preload, className, ariaLabel }: SurfaceWebviewProps) {
+function SurfaceWebview({ src, preload, className, ariaLabel, partition }: SurfaceWebviewProps) {
   return React.createElement('webview', {
     src,
     preload,
     className,
     'aria-label': ariaLabel,
+    ...(partition ? { partition } : {}),
   })
 }
 
@@ -86,11 +88,6 @@ function AppLogoMenu() {
       </TopBarButton>
       {open && (
         <div className="app-logo-menu popover-styled" role="menu">
-          <button role="menuitem" onClick={() => run(() => { void window.shellAPI.openApp('todo-placeholder') })}>
-            <ListTodo className="h-3.5 w-3.5" />
-            Open TODO Placeholder
-          </button>
-          <div className="app-logo-menu-separator" />
           <button role="menuitem" onClick={() => run(() => { void window.shellAPI.sendAgentCommand('new-session') })}>
             <SquarePenRounded className="h-3.5 w-3.5" />
             New Session
@@ -180,7 +177,7 @@ function Shell() {
     if (!bootstrap) return null
     return {
       home: withQuery(bootstrap.appHostSrc, { appId: 'home' }),
-      tabs: new Map(state.tabs.map(tab => [
+      tabs: new Map(state.tabs.filter(tab => tab.kind === 'built-in').map(tab => [
         tab.id,
         withQuery(bootstrap.appHostSrc, { appId: tab.appId, tabId: tab.id }),
       ])),
@@ -261,7 +258,12 @@ function Shell() {
               className={`app-tab ${state.activeTarget.kind === 'app' && state.activeTarget.tabId === tab.id ? 'active' : ''}`}
               onClick={() => void window.shellAPI.activateTab(tab.id)}
             >
-              <span>{tab.title}</span>
+              {tab.iconUrl ? (
+                <img className="app-tab-icon" src={tab.iconUrl} alt="" />
+              ) : tab.kind === 'external' ? (
+                <AppWindow className="app-tab-icon-placeholder" size={14} />
+              ) : null}
+              <span className="app-tab-title">{tab.title}</span>
               <span
                 className="tab-close"
                 role="button"
@@ -300,14 +302,38 @@ function Shell() {
                 ariaLabel="Home"
                 className={`surface-webview app-surface ${activeContentTabId === null ? 'surface-active' : ''}`}
               />
-              {state.tabs.map(tab => (
+              {state.tabs.filter(tab => tab.kind === 'built-in' || tab.status === 'ready').map(tab => (
                 <SurfaceWebview
                   key={tab.id}
-                  src={appHostSources.tabs.get(tab.id)!}
-                  preload={bootstrap.appHostPreload}
+                  src={tab.kind === 'external' ? tab.entry : appHostSources.tabs.get(tab.id)!}
+                  preload={tab.kind === 'external' ? bootstrap.externalAppPreload : bootstrap.appHostPreload}
                   ariaLabel={tab.title}
+                  partition={tab.partition}
                   className={`surface-webview app-surface ${activeContentTabId === tab.id ? 'surface-active' : ''}`}
                 />
+              ))}
+              {state.tabs.filter(tab => tab.kind === 'external' && tab.status !== 'ready').map(tab => (
+                <div
+                  key={`status-${tab.id}`}
+                  className={`app-status-surface ${activeContentTabId === tab.id ? 'surface-active' : ''}`}
+                  aria-label={tab.title}
+                >
+                  {tab.status === 'error' ? (
+                    <div className="app-status-content">
+                      <AppWindow size={36} strokeWidth={1.4} />
+                      <h2>App 加载失败</h2>
+                      <p>{tab.error || '无法加载 App，请稍后重试。'}</p>
+                      <button onClick={() => void window.shellAPI.retryExternalApp(tab.appId)}>
+                        <RotateCw size={14} />重试
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="app-status-content">
+                      <LoaderCircle className="app-status-spinner" size={30} strokeWidth={1.6} />
+                      <h2>正在加载 App...</h2>
+                    </div>
+                  )}
+                </div>
               ))}
             </>
           )}

@@ -93,6 +93,12 @@ export class ShellTabManager {
         appId: input.definition.id,
         title: input.definition.title,
         webContentsId: input.webContentsId,
+        kind: input.definition.kind,
+        entry: input.definition.entry,
+        iconUrl: input.definition.iconUrl,
+        status: input.definition.status ?? 'ready',
+        error: input.definition.error,
+        partition: input.definition.partition,
       }
       draft.tabs.push(tab)
       draft.activeTarget = { kind: 'app', tabId: tab.id }
@@ -174,6 +180,15 @@ export class ShellTabManager {
     })
   }
 
+  ensureAgentPanelVisible(): TabTransaction {
+    return this.commit(draft => {
+      if (draft.activeTarget.kind === 'agent') {
+        draft.activeTarget = this.resolvePreviousContent(draft)
+      }
+      draft.agentPanelVisible = true
+    })
+  }
+
   setAgentPanelWidth(panelWidthPx: number): TabTransaction {
     return this.commit(draft => {
       draft.agentPanelWidthPx = panelWidthPx
@@ -183,6 +198,18 @@ export class ShellTabManager {
   updateTabWebContentsId(tabId: string, webContentsId: number): TabTransaction {
     return this.commit(draft => {
       this.requireTab(draft, tabId).webContentsId = webContentsId
+    })
+  }
+
+  updateAppTab(tabId: string, definition: AppDefinition): TabTransaction {
+    return this.commit(draft => {
+      const tab = this.requireTab(draft, tabId)
+      tab.title = definition.title
+      tab.entry = definition.entry
+      tab.iconUrl = definition.iconUrl
+      tab.status = definition.status ?? 'ready'
+      tab.error = definition.error
+      tab.partition = definition.partition
     })
   }
 

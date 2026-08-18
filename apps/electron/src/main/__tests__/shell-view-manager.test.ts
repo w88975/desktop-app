@@ -1,13 +1,77 @@
 import { describe, expect, it, mock } from 'bun:test'
 
+const handleProtocol = mock(() => {})
+const appSession = { protocol: { handle: handleProtocol } }
 mock.module('electron', () => ({
   shell: { openExternal: mock(async () => {}) },
+  session: {
+    defaultSession: { protocol: { handle: mock(() => {}) } },
+    fromPartition: mock(() => appSession),
+  },
+  protocol: { registerSchemesAsPrivileged: mock(() => {}) },
 }))
 mock.module('../logger', () => ({
   windowLog: { info: mock(() => {}), warn: mock(() => {}), error: mock(() => {}) },
 }))
 
 const { ShellViewManager } = await import('../shell-view-manager')
+
+function createExternalAppRegistry() {
+  const todo = {
+    appId: 'todo-placeholder',
+    sourceType: 'builtin',
+    status: 'ready',
+    title: 'TODO',
+    description: '内置待办事项',
+    iconUrl: 'hxsy-app://todo-placeholder/icon.svg',
+    entryUrl: 'hxsy-app://todo-placeholder/index.html',
+    webTools: [],
+  }
+  return {
+    list: () => [structuredClone(todo)],
+    get: (appId: string) => appId === todo.appId ? structuredClone(todo) : null,
+    subscribe: () => () => {},
+    retry: mock(async () => {}),
+    resolveRemote: mock(async () => {}),
+    markRuntimeError: mock(() => {}),
+  }
+}
+
+function createRemoteAppRegistry() {
+  let record: any = {
+    appId: 'com.huaxisy.remote',
+    sourceType: 'remote',
+    status: 'discovered',
+    title: '加载中...',
+    webTools: [],
+  }
+  const listeners = new Set<(records: any[]) => void>()
+  const emit = () => listeners.forEach(listener => listener([structuredClone(record)]))
+  return {
+    list: () => [structuredClone(record)],
+    get: (appId: string) => appId === record.appId ? structuredClone(record) : null,
+    subscribe: (listener: (records: any[]) => void) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    retry: mock(async () => {}),
+    resolveRemote: mock(async () => {
+      record = {
+        ...record,
+        status: 'ready',
+        title: 'Remote Demo',
+        iconUrl: 'hxsy-app://com.huaxisy.remote/icon.svg',
+        entryUrl: 'https://apps.internal/demo/',
+      }
+      emit()
+      return structuredClone(record)
+    }),
+    markRuntimeError: mock((_appId: string, error: string) => {
+      record = { ...record, status: 'error', title: '加载失败', error }
+      emit()
+    }),
+  }
+}
 
 function createWindow() {
   const listeners = new Map<string, Function[]>()
@@ -63,6 +127,7 @@ describe('ShellViewManager webview lifecycle', () => {
       window: createWindow() as any,
       workspaceId: 'ws-1',
       initialActiveTarget: 'home',
+      externalAppRegistry: createExternalAppRegistry() as any,
       registerSurface: (id, kind, tabId) => registered.push({ id, kind, tabId }),
       unregisterSurface: id => unregistered.push(id),
     })
@@ -78,10 +143,9 @@ describe('ShellViewManager webview lifecycle', () => {
     expect(manager.getState().tabs).toHaveLength(1)
     expect(manager.getState().activeTarget).toEqual({ kind: 'app', tabId: first.id })
 
-    const appGuest = createGuest(12, addQuery(bootstrap.appHostSrc, {
-      appId: 'todo-placeholder',
-      tabId: first.id,
-    }))
+    const preferences: Record<string, unknown> = {}
+    expect(manager.authorizeGuest(first.entry, preferences as any, first.partition)).toBe(true)
+    const appGuest = createGuest(12, first.entry)
     expect(manager.attachGuest(appGuest as any)).toBe(true)
     expect(manager.getState().tabs[0].webContentsId).toBe(12)
 
@@ -99,6 +163,7 @@ describe('ShellViewManager webview lifecycle', () => {
       window: createWindow() as any,
       workspaceId: 'ws-1',
       initialActiveTarget: 'home',
+      externalAppRegistry: createExternalAppRegistry() as any,
       registerSurface: () => {},
       unregisterSurface: () => {},
     })
@@ -138,6 +203,7 @@ describe('ShellViewManager webview lifecycle', () => {
       window: createWindow() as any,
       workspaceId: 'ws-1',
       initialActiveTarget: 'agent',
+      externalAppRegistry: createExternalAppRegistry() as any,
       registerSurface: () => {},
       unregisterSurface: () => {},
     })
@@ -158,5 +224,48 @@ describe('ShellViewManager webview lifecycle', () => {
       activeTarget: { kind: 'app', tabId },
       agentPanelVisible: false,
     })
+  })
+
+  it('resolves Remote App lazily and authorizes its isolated webview', async () => {
+    const registered: Array<{ id: number; kind: string; tabId?: string; appId?: string }> = []
+    const registry = createRemoteAppRegistry()
+    const manager = new ShellViewManager({
+      window: createWindow() as any,
+      workspaceId: 'ws-1',
+      initialActiveTarget: 'home',
+      externalAppRegistry: registry as any,
+      registerSurface: (id, kind, tabId, appId) => registered.push({ id, kind, tabId, appId }),
+      unregisterSurface: () => {},
+    })
+
+    manager.openApp('com.huaxisy.remote')
+    await Promise.resolve()
+    const tab = manager.getState().tabs[0]
+    expect(tab).toMatchObject({
+      appId: 'com.huaxisy.remote',
+      kind: 'external',
+      status: 'ready',
+      title: 'Remote Demo',
+      entry: 'https://apps.internal/demo/',
+      partition: 'persist:hxsy-app-com.huaxisy.remote',
+    })
+
+    const preferences: Record<string, unknown> = {}
+    expect(manager.authorizeGuest(tab.entry, preferences as any, tab.partition)).toBe(true)
+    expect(String(preferences.preload)).toContain('external-app-preload.cjs')
+    expect(preferences.partition).toBe(tab.partition)
+    expect(handleProtocol).toHaveBeenCalledWith('hxsy-app', expect.any(Function))
+
+    const guest = createGuest(30, tab.entry)
+    expect(manager.attachGuest(guest as any)).toBe(true)
+    expect(registered.at(-1)).toEqual({
+      id: 30,
+      kind: 'app',
+      tabId: tab.id,
+      appId: 'com.huaxisy.remote',
+    })
+
+    guest.emit('did-fail-load', {}, -105, 'NAME_NOT_RESOLVED', tab.entry, true)
+    expect(manager.getState().tabs[0]).toMatchObject({ status: 'error', title: '加载失败' })
   })
 })

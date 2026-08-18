@@ -11,13 +11,65 @@ export type ActiveTarget =
   | { kind: 'agent' }
 
 export type AppInstancePolicy = 'single' | 'multiple'
+export type AppKind = 'built-in' | 'external'
+export type ExternalAppSourceType = 'builtin' | 'local' | 'remote'
+export type ExternalAppStatus = 'discovered' | 'loading' | 'ready' | 'error'
+
+export interface ExternalWebToolManifest {
+  name: string
+  description: string
+  inputSchema: Record<string, unknown>
+  handler: string
+}
+
+export interface ExternalAppManifest {
+  schemaVersion: 1
+  appId: string
+  title: string
+  icon: string
+  entry: string
+  version?: string
+  description?: string
+  webTools?: ExternalWebToolManifest[]
+}
+
+export interface ExternalAppRecord {
+  appId: string
+  sourceType: ExternalAppSourceType
+  status: ExternalAppStatus
+  title: string
+  description?: string
+  version?: string
+  iconUrl?: string
+  entryUrl?: string
+  error?: string
+  webTools: ExternalWebToolManifest[]
+}
+
+export interface InstalledAppSummary {
+  appId: string
+  kind: AppKind
+  sourceType?: ExternalAppSourceType
+  status: ExternalAppStatus
+  title: string
+  description?: string
+  version?: string
+  iconUrl?: string
+  error?: string
+  webTools: ExternalWebToolManifest[]
+}
 
 export interface AppDefinition {
   id: string
   title: string
   entry: string
+  kind: AppKind
   instancePolicy: AppInstancePolicy
   capabilities: readonly string[]
+  iconUrl?: string
+  status?: ExternalAppStatus
+  error?: string
+  partition?: string
 }
 
 export interface AppTab {
@@ -25,6 +77,12 @@ export interface AppTab {
   appId: string
   title: string
   webContentsId: number
+  kind: AppKind
+  entry: string
+  iconUrl?: string
+  status: ExternalAppStatus
+  error?: string
+  partition?: string
 }
 
 export interface ShellState {
@@ -40,6 +98,7 @@ export interface WebviewSurfaceBootstrap {
   agentPreload: string
   appHostSrc: string
   appHostPreload: string
+  externalAppPreload: string
 }
 
 export type AgentShellCommand = 'new-session' | 'open-settings' | 'open-shortcuts' | 'toggle-sidebar'
@@ -65,6 +124,14 @@ export const APP_PLATFORM_CHANNELS = {
   AGENT_COMMAND_RECEIVED: 'app-platform:agent-command-received',
   AGENT_NAVIGATION_INTENT_RECEIVED: 'app-platform:agent-navigation-intent-received',
   AGENT_RENDERER_READY: 'app-platform:agent-renderer-ready',
+  LIST_INSTALLED_APPS: 'app-platform:list-installed-apps',
+  OPEN_APPS_DIRECTORY: 'app-platform:open-apps-directory',
+  RESCAN_EXTERNAL_APPS: 'app-platform:rescan-external-apps',
+  RETRY_EXTERNAL_APP: 'app-platform:retry-external-app',
+  INSTALLED_APPS_CHANGED: 'app-platform:installed-apps-changed',
+  EXTERNAL_GET_APP_NAME: 'app-platform:external-get-app-name',
+  EXTERNAL_GET_APP_VERSION: 'app-platform:external-get-app-version',
+  EXTERNAL_OPEN_AGENT_PANEL: 'app-platform:external-open-agent-panel',
 } as const
 
 export interface ShellAPI {
@@ -76,6 +143,7 @@ export interface ShellAPI {
   closeTab(tabId: string): Promise<void>
   focusAgentTab(intent?: AgentNavigationIntent): Promise<void>
   toggleAgentPanel(): Promise<void>
+  retryExternalApp(appId: string): Promise<void>
   setPanelWidth(widthPx: number): Promise<void>
   sendAgentCommand(command: AgentShellCommand): Promise<void>
   onStateChanged(callback: (state: ShellState) => void): () => void
@@ -83,6 +151,18 @@ export interface ShellAPI {
 
 export interface AppHostAPI {
   capabilities: readonly string[]
+  listInstalledApps(): Promise<InstalledAppSummary[]>
+  openInstalledApp(appId: string): Promise<void>
+  retryExternalApp(appId: string): Promise<void>
+  openAppsDirectory(): Promise<void>
+  rescanExternalApps(): Promise<void>
+  onInstalledAppsChanged(callback: (apps: InstalledAppSummary[]) => void): () => void
+}
+
+export interface HxsyAppBridge {
+  getAppName(): Promise<string>
+  getAppVersion(): Promise<string>
+  openAgentPanel(): Promise<void>
 }
 
 export type SurfaceKind = 'shell' | 'agent' | 'home' | 'app'
@@ -93,6 +173,7 @@ export interface SurfaceRegistration {
   workspaceId: string
   kind: SurfaceKind
   tabId?: string
+  appId?: string
 }
 
 export const AGENT_PANEL_DEFAULT_RATIO = 0.4
@@ -130,19 +211,10 @@ export function getDefaultAgentPanelWidth(contentWidthPx: number): number {
   return clampAgentPanelWidth(contentWidthPx, contentWidthPx * AGENT_PANEL_DEFAULT_RATIO)
 }
 
-export const BUILT_IN_APPS = {
-  TODO_PLACEHOLDER: {
-    id: 'todo-placeholder',
-    title: 'TODO',
-    entry: 'app-host.html?appId=todo-placeholder',
-    instancePolicy: 'single',
-    capabilities: [],
-  },
-} as const satisfies Record<string, AppDefinition>
-
 declare global {
   interface Window {
     shellAPI: ShellAPI
     appHostAPI: AppHostAPI
+    hxsyApp: HxsyAppBridge
   }
 }

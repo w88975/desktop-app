@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'bun:test'
 import {
-  BUILT_IN_APPS,
   clampAgentPanelWidth,
   deriveAgentPresentationState,
   getActiveContentTabId,
@@ -31,18 +30,15 @@ describe('app platform shared model', () => {
     expect(clampAgentPanelWidth(800, 700)).toBe(440)
   })
 
-  it('registers TODO placeholder as singleton with no capabilities', () => {
-    expect(BUILT_IN_APPS.TODO_PLACEHOLDER).toEqual({
+  it('keeps manifest and Agent state unions narrow', () => {
+    const app: AppDefinition = {
       id: 'todo-placeholder',
       title: 'TODO',
-      entry: 'app-host.html?appId=todo-placeholder',
+      entry: 'hxsy-app://todo-placeholder/index.html',
+      kind: 'external',
       instancePolicy: 'single',
       capabilities: [],
-    })
-  })
-
-  it('keeps manifest and Agent state unions narrow', () => {
-    const app: AppDefinition = BUILT_IN_APPS.TODO_PLACEHOLDER
+    }
     const state: AgentPresentationState = {
       presentation: 'full',
       panelWidthPx: 480,

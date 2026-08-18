@@ -106,6 +106,8 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   extraResources:
+    - from: ../builtin
+      to: app/builtin
     # Thin core SDK (sdk.mjs + types). ~4 MB — present on every platform.
     - from: node_modules/@anthropic-ai/claude-agent-sdk
       to: app/node_modules/@anthropic-ai/claude-agent-sdk
@@ -173,6 +175,8 @@ win:
     - "!**/resources/bin/win32-x64/**"
   # Copy executables as extraResources to avoid EBUSY file locking (see comment above)
   extraResources:
+    - from: ../builtin
+      to: app/builtin
     - from: node_modules/@anthropic-ai/claude-agent-sdk
       to: app/node_modules/@anthropic-ai/claude-agent-sdk
     - from: node_modules/@anthropic-ai/claude-agent-sdk-binary
@@ -204,6 +208,8 @@ linux:
         - x64
   artifactName: "Craft-Agents-${arch}.${ext}"
   extraResources:
+    - from: ../builtin
+      to: app/builtin
     - from: node_modules/@anthropic-ai/claude-agent-sdk
       to: app/node_modules/@anthropic-ai/claude-agent-sdk
     - from: node_modules/@anthropic-ai/claude-agent-sdk-binary

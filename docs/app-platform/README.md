@@ -8,7 +8,9 @@ into a multi-app desktop shell.
 - [`glossary.md`](./glossary.md): shared domain language
 - [`adr/0001-native-multi-renderer-shell.md`](./adr/0001-native-multi-renderer-shell.md): renderer/process boundary
 - [`adr/0003-agent-full-view-as-shell-tab.md`](./adr/0003-agent-full-view-as-shell-tab.md): fixed Agent tab and Panel interaction model
+- [`adr/0004-directory-discovered-external-apps.md`](./adr/0004-directory-discovered-external-apps.md): Builtin/Local/Remote PWA discovery and runtime
 - [`agent-tab-refactor-plan.md`](./agent-tab-refactor-plan.md): implementation sequence and acceptance criteria
+- [`external-app-development.md`](./external-app-development.md): 外部 App中文开发指南
 
 ## Confirmed product requirements
 
@@ -26,8 +28,9 @@ into a multi-app desktop shell.
 - Title bar, content, and Agent require isolated
   renderers. Isolation must not depend on React, JavaScript, or CSS boundaries.
 - Title bar retains current back/forward control UI and click affordances.
-- Home v1 renders only a text placeholder. Launcher, overview, recents, and
-  other Home product features are deferred.
+- Home v1 renders the Builtin/Local/Remote PWA launcher with source badges,
+  open-directory, rescan, loading, error, and retry states. Store/search/category
+  product features remain deferred.
 - Agent Panel chat header replaces current Share button with `Open Agent full
   view`; Full Agent retains reverse `Dock Agent as panel`. Existing chat Close
   behavior remains.
@@ -71,9 +74,9 @@ into a multi-app desktop shell.
   Agent state is unaffected.
 - Shell does not persist or restore app tabs in v1. Process restart begins with
   Home only.
-- Version 1 includes built-in singleton `TODO Placeholder`, opened from a
-  temporary App Logo menu entry. It exists only to exercise tab and renderer
-  architecture; no TODO product behavior is implemented.
+- Builtin singleton TODO is a manifest-based PWA under
+  `apps/builtin/todo-placeholder`. It uses the same registry, protocol, preload,
+  bridge, partition, and tab lifecycle as Local/Remote Apps.
 
 ## Open decisions
 
@@ -82,7 +85,7 @@ into a multi-app desktop shell.
 - Future Home information architecture and features.
 - Agent-panel New Conversation action.
 - Detailed capability matrix for built-in apps.
-- Future remote/third-party app trust model.
+- Future public/untrusted external-app trust model.
 - Detailed ownership of global auth and future cross-app data APIs.
 - Relocation map for remaining functions currently reachable only from old
   Agent top bar. App Logo menu is retained globally.
@@ -144,6 +147,8 @@ remains historical baseline for implemented webview-shell migration.
   Home, each app tab, and Agent use separate `<webview>` guests. This keeps
   guest renderer isolation while allowing shell menus/dialogs to cover all
   content through normal DOM stacking. Main owns authorization and lifecycle.
-- Version 1 loads only built-in, locally packaged, first-party apps. Arbitrary
-  remote URLs and third-party app plugins are out of scope. App manifests still
-  declare minimal preload capabilities.
+- PWA App v1 discovers Builtin Apps from `apps/builtin` plus controlled
+  Local/Remote Apps from `userData/apps`, uses `manifest-hxsy.json`, and exposes
+  only the three-method `hxsyApp` bridge.
+  Public/untrusted content, signatures, Store installation, and capability
+  grants remain out of scope; see ADR 0004.

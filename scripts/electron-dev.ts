@@ -453,6 +453,7 @@ async function main(): Promise<void> {
   const toolbarPreloadCjsPath = join(DIST_DIR, "browser-toolbar-preload.cjs");
   const shellPreloadCjsPath = join(DIST_DIR, "shell-preload.cjs");
   const appHostPreloadCjsPath = join(DIST_DIR, "app-host-preload.cjs");
+  const externalAppPreloadCjsPath = join(DIST_DIR, "external-app-preload.cjs");
 
   // Remove old build files to ensure fresh build
   if (existsSync(mainCjsPath)) rmSync(mainCjsPath);
@@ -460,9 +461,10 @@ async function main(): Promise<void> {
   if (existsSync(toolbarPreloadCjsPath)) rmSync(toolbarPreloadCjsPath);
   if (existsSync(shellPreloadCjsPath)) rmSync(shellPreloadCjsPath);
   if (existsSync(appHostPreloadCjsPath)) rmSync(appHostPreloadCjsPath);
+  if (existsSync(externalAppPreloadCjsPath)) rmSync(externalAppPreloadCjsPath);
 
   // Build main and preload entries in parallel
-  const [mainResult, preloadResult, toolbarPreloadResult, shellPreloadResult, appHostPreloadResult] = await Promise.all([
+  const [mainResult, preloadResult, toolbarPreloadResult, shellPreloadResult, appHostPreloadResult, externalAppPreloadResult] = await Promise.all([
     runEsbuild(
       "apps/electron/src/main/index.ts",
       "apps/electron/dist/main.cjs",
@@ -485,6 +487,10 @@ async function main(): Promise<void> {
       "apps/electron/src/preload/app-host.ts",
       "apps/electron/dist/app-host-preload.cjs"
     ),
+    runEsbuild(
+      "apps/electron/src/preload/external-app.ts",
+      "apps/electron/dist/external-app-preload.cjs"
+    ),
   ]);
 
   if (!mainResult.success) {
@@ -501,34 +507,36 @@ async function main(): Promise<void> {
     console.error("❌ Browser toolbar preload build failed:", toolbarPreloadResult.error);
     process.exit(1);
   }
-  if (!shellPreloadResult.success || !appHostPreloadResult.success) {
-    console.error("❌ App-platform preload build failed:", shellPreloadResult.error || appHostPreloadResult.error);
+  if (!shellPreloadResult.success || !appHostPreloadResult.success || !externalAppPreloadResult.success) {
+    console.error("❌ App-platform preload build failed:", shellPreloadResult.error || appHostPreloadResult.error || externalAppPreloadResult.error);
     process.exit(1);
   }
 
   // Wait for files to stabilize (filesystem flush)
   console.log("⏳ Waiting for build files to stabilize...");
-  const [mainStable, preloadStable, toolbarPreloadStable, shellPreloadStable, appHostPreloadStable] = await Promise.all([
+  const [mainStable, preloadStable, toolbarPreloadStable, shellPreloadStable, appHostPreloadStable, externalAppPreloadStable] = await Promise.all([
     waitForFileStable(mainCjsPath),
     waitForFileStable(preloadCjsPath),
     waitForFileStable(toolbarPreloadCjsPath),
     waitForFileStable(shellPreloadCjsPath),
     waitForFileStable(appHostPreloadCjsPath),
+    waitForFileStable(externalAppPreloadCjsPath),
   ]);
 
-  if (!mainStable || !preloadStable || !toolbarPreloadStable || !shellPreloadStable || !appHostPreloadStable) {
+  if (!mainStable || !preloadStable || !toolbarPreloadStable || !shellPreloadStable || !appHostPreloadStable || !externalAppPreloadStable) {
     console.error("❌ Build files did not stabilize");
     process.exit(1);
   }
 
   // Verify the built files are valid JavaScript
   console.log("🔍 Verifying build output...");
-  const [mainValid, preloadValid, toolbarPreloadValid, shellPreloadValid, appHostPreloadValid] = await Promise.all([
+  const [mainValid, preloadValid, toolbarPreloadValid, shellPreloadValid, appHostPreloadValid, externalAppPreloadValid] = await Promise.all([
     verifyJsFile(mainCjsPath),
     verifyJsFile(preloadCjsPath),
     verifyJsFile(toolbarPreloadCjsPath),
     verifyJsFile(shellPreloadCjsPath),
     verifyJsFile(appHostPreloadCjsPath),
+    verifyJsFile(externalAppPreloadCjsPath),
   ]);
 
   if (!mainValid.valid) {
@@ -545,8 +553,8 @@ async function main(): Promise<void> {
     console.error("❌ browser-toolbar-preload.cjs is invalid:", toolbarPreloadValid.error);
     process.exit(1);
   }
-  if (!shellPreloadValid.valid || !appHostPreloadValid.valid) {
-    console.error("❌ App-platform preload is invalid:", shellPreloadValid.error || appHostPreloadValid.error);
+  if (!shellPreloadValid.valid || !appHostPreloadValid.valid || !externalAppPreloadValid.valid) {
+    console.error("❌ App-platform preload is invalid:", shellPreloadValid.error || appHostPreloadValid.error || externalAppPreloadValid.error);
     process.exit(1);
   }
 
@@ -618,6 +626,7 @@ async function main(): Promise<void> {
   for (const [entry, outfile, label] of [
     ["apps/electron/src/preload/shell.ts", "apps/electron/dist/shell-preload.cjs", "shell preload"],
     ["apps/electron/src/preload/app-host.ts", "apps/electron/dist/app-host-preload.cjs", "app-host preload"],
+    ["apps/electron/src/preload/external-app.ts", "apps/electron/dist/external-app-preload.cjs", "external-app preload"],
   ] as const) {
     const context = await esbuild.context({
       entryPoints: [join(ROOT_DIR, entry)],

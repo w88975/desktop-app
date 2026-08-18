@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "appId": "todo-placeholder",
+  "version": "1.0.0",
+  "title": "TODO",
+  "description": "内置待办事项",
+  "icon": "./icon.svg",
+  "entry": "./index.html",
+  "webTools": [
+    {
+      "name": "create_todo",
+      "description": "创建一个待办事项",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" }
+        },
+        "required": ["title"]
+      },
+      "handler": "createTodo"
+    }
+  ]
+}

@@ -34,6 +34,11 @@ const OUTPUTS = [
     outfile: "apps/electron/dist/app-host-preload.cjs",
     label: "app-host-preload.cjs",
   },
+  {
+    entry: "apps/electron/src/preload/external-app.ts",
+    outfile: "apps/electron/dist/external-app-preload.cjs",
+    label: "external-app-preload.cjs",
+  },
 ] as const;
 
 // Wait for file to stabilize (no size changes)

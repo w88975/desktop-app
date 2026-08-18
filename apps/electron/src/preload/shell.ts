@@ -16,6 +16,7 @@ const api: ShellAPI = {
   closeTab: (tabId) => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.CLOSE_TAB, tabId),
   focusAgentTab: (intent) => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.FOCUS_AGENT_TAB, intent),
   toggleAgentPanel: () => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.TOGGLE_AGENT_PANEL),
+  retryExternalApp: (appId) => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.RETRY_EXTERNAL_APP, appId),
   setPanelWidth: (widthPx) => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.SET_PANEL_WIDTH, widthPx),
   sendAgentCommand: (command: AgentShellCommand) => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.AGENT_COMMAND, command),
   onStateChanged: (callback: (state: ShellState) => void) => {
