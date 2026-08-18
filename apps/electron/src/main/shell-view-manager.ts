@@ -6,12 +6,10 @@ import { windowLog } from './logger'
 import {
   APP_PLATFORM_CHANNELS,
   BUILT_IN_APPS,
-  DEFAULT_AGENT_PRESENTATION_STATE,
   clampAgentPanelWidth,
+  deriveAgentPresentationState,
   getDefaultAgentPanelWidth,
-  reduceAgentPresentation,
-  type AgentMode,
-  type AgentPresentationState,
+  type AgentNavigationIntent,
   type AgentShellCommand,
   type AppDefinition,
   type AppTab,
@@ -19,13 +17,14 @@ import {
   type SurfaceKind,
   type WebviewSurfaceBootstrap,
 } from '../shared/app-platform'
+import { ShellTabManager, type ShellTabEffect } from './shell-tab-manager'
 
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
 
 interface ShellViewManagerOptions {
   window: BrowserWindow
   workspaceId: string
-  initialAgentMode?: AgentMode | 'hidden'
+  initialActiveTarget?: 'home' | 'agent'
   registerSurface: (webContentsId: number, kind: Exclude<SurfaceKind, 'shell'>, tabId?: string) => void
   unregisterSurface: (webContentsId: number) => void
 }
@@ -47,16 +46,16 @@ export class ShellViewManager {
   private readonly workspaceId: string
   private readonly registerSurface: ShellViewManagerOptions['registerSurface']
   private readonly unregisterSurface: ShellViewManagerOptions['unregisterSurface']
-  private readonly tabs: ManagedTab[] = []
+  private readonly managedTabs = new Map<string, ManagedTab>()
   private readonly guestWebContents = new Map<number, WebContents>()
   private readonly pendingGuestDescriptors: GuestDescriptor[] = []
   private readonly queuedAgentCommands: AgentShellCommand[] = []
-  private activeTabId: string | null = null
+  private readonly queuedAgentNavigationIntents: AgentNavigationIntent[] = []
+  private readonly tabManager: ShellTabManager
   private agentWebContents: WebContents | null = null
   private agentRendererReady = false
   private homeWebContents: WebContents | null = null
   private nextPendingWebContentsId = -1
-  private agentState: AgentPresentationState
   private destroyed = false
 
   constructor(options: ShellViewManagerOptions) {
@@ -66,12 +65,10 @@ export class ShellViewManager {
     this.unregisterSurface = options.unregisterSurface
 
     const [width] = this.window.getContentSize()
-    this.agentState = {
-      ...DEFAULT_AGENT_PRESENTATION_STATE,
+    this.tabManager = new ShellTabManager({
+      initialActiveTarget: options.initialActiveTarget ?? 'home',
       panelWidthPx: getDefaultAgentPanelWidth(width),
-      visible: options.initialAgentMode !== undefined && options.initialAgentMode !== 'hidden',
-      lastMode: options.initialAgentMode === 'full' ? 'full' : 'panel',
-    }
+    })
 
     this.window.on('resize', this.handleResize)
   }
@@ -124,7 +121,7 @@ export class ShellViewManager {
       if (appId === 'home') return { kind: 'home', preload: bootstrap.appHostPreload }
 
       const tabId = parsed.searchParams.get('tabId') ?? undefined
-      const tab = tabId ? this.tabs.find(item => item.tab.id === tabId) : undefined
+      const tab = tabId ? this.managedTabs.get(tabId) : undefined
       if (!tab || tab.definition.id !== appId) return null
       return { kind: 'app', tabId, preload: bootstrap.appHostPreload }
     } catch {
@@ -169,10 +166,10 @@ export class ShellViewManager {
       if (this.homeWebContents && !this.homeWebContents.isDestroyed()) return false
       this.homeWebContents = contents
     } else {
-      const tab = this.tabs.find(item => item.tab.id === descriptor.tabId)
+      const tab = descriptor.tabId ? this.managedTabs.get(descriptor.tabId) : undefined
       if (!tab || (tab.webContents && !tab.webContents.isDestroyed())) return false
       tab.webContents = contents
-      tab.tab.webContentsId = contents.id
+      this.tabManager.updateTabWebContentsId(tab.tab.id, contents.id)
     }
 
     this.guestWebContents.set(contents.id, contents)
@@ -229,28 +226,22 @@ export class ShellViewManager {
       this.agentRendererReady = false
     }
     if (this.homeWebContents?.id === webContentsId) this.homeWebContents = null
-    const tab = this.tabs.find(item => item.webContents?.id === webContentsId)
+    const tab = [...this.managedTabs.values()].find(item => item.webContents?.id === webContentsId)
     if (tab) {
       tab.webContents = null
-      tab.tab.webContentsId = this.nextPendingWebContentsId--
+      this.tabManager.updateTabWebContentsId(tab.tab.id, this.nextPendingWebContentsId--)
     }
   }
 
   private handleResize = (): void => {
     const [contentWidth] = this.window.getContentSize()
-    this.agentState = {
-      ...this.agentState,
-      panelWidthPx: clampAgentPanelWidth(contentWidth, this.agentState.panelWidthPx),
-    }
+    const state = this.tabManager.getState()
+    this.tabManager.setAgentPanelWidth(clampAgentPanelWidth(contentWidth, state.agentPanelWidthPx))
     this.emitState()
   }
 
   getState(): ShellState {
-    return {
-      activeTabId: this.activeTabId,
-      tabs: this.tabs.map(({ tab }) => ({ ...tab })),
-      agent: { ...this.agentState },
-    }
+    return this.tabManager.getState()
   }
 
   getAgentWebContentsId(): number | undefined {
@@ -262,91 +253,73 @@ export class ShellViewManager {
   }
 
   activateHome(): void {
-    this.activeTabId = null
-    this.finishContentActivation()
+    this.tabManager.activateHome()
+    this.emitAllState()
   }
 
   openApp(appId: string): void {
     const definition = Object.values(BUILT_IN_APPS).find(app => app.id === appId)
     if (!definition) throw new Error(`Unknown built-in app: ${appId}`)
 
-    if (definition.instancePolicy === 'single') {
-      const existing = this.tabs.find(item => item.definition.id === appId)
-      if (existing) {
-        this.activateTab(existing.tab.id)
-        return
-      }
-    }
-
     const tabId = randomUUID()
-    const tab: AppTab = {
-      id: tabId,
-      appId: definition.id,
-      title: definition.title,
-      webContentsId: this.nextPendingWebContentsId--,
+    const transaction = this.tabManager.openAppTab({
+      definition,
+      tabId,
+      webContentsId: this.nextPendingWebContentsId,
+    })
+    if (transaction.value.created) {
+      this.nextPendingWebContentsId--
+      this.managedTabs.set(transaction.value.tab.id, {
+        tab: transaction.value.tab,
+        definition,
+        webContents: null,
+      })
     }
-    this.tabs.push({ tab, definition, webContents: null })
-    this.activeTabId = tabId
-    this.finishContentActivation()
+    this.emitAllState()
   }
 
   activateTab(tabId: string): void {
-    if (!this.tabs.some(item => item.tab.id === tabId)) throw new Error(`Unknown app tab: ${tabId}`)
-    this.activeTabId = tabId
-    this.finishContentActivation()
-  }
-
-  private finishContentActivation(): void {
-    if (this.agentState.visible && this.agentState.lastMode === 'full') {
-      this.agentState = { ...this.agentState, visible: false }
-      this.emitAllState()
-      return
-    }
-    this.emitState()
+    this.tabManager.activateAppTab(tabId)
+    this.emitAllState()
   }
 
   closeTab(tabId: string): void {
-    const index = this.tabs.findIndex(item => item.tab.id === tabId)
-    if (index < 0) return
-    const [removed] = this.tabs.splice(index, 1)
-
-    if (this.activeTabId === tabId) {
-      this.activeTabId = this.tabs[index - 1]?.tab.id ?? null
-    }
-    this.emitState()
-    if (removed.webContents && !removed.webContents.isDestroyed()) removed.webContents.close()
+    const transaction = this.tabManager.closeAppTab(tabId)
+    if (!transaction.value) return
+    this.emitAllState()
+    this.applyTabEffects(transaction.effects)
   }
 
-  toggleAgent(): void {
-    this.agentState = reduceAgentPresentation(this.agentState, { type: 'agent-icon' })
+  toggleAgentPanel(): void {
+    this.tabManager.toggleAgentPanel()
     this.emitAllState()
   }
 
-  toggleAgentMode(): void {
-    this.agentState = reduceAgentPresentation(this.agentState, { type: 'header-toggle' })
+  focusAgentTab(intent?: AgentNavigationIntent): void {
+    const transaction = this.tabManager.focusAgentTab(intent)
+    this.emitAllState()
+    this.applyTabEffects(transaction.effects)
+  }
+
+  unfocusAgentTab(): void {
+    this.tabManager.unfocusAgentTab()
     this.emitAllState()
   }
 
-  closeAgentPanel(): void {
-    if (this.agentState.lastMode !== 'panel') return
-    this.agentState = reduceAgentPresentation(this.agentState, { type: 'panel-close' })
+  dockAgentAsPanel(): void {
+    this.tabManager.dockAgentAsPanel()
     this.emitAllState()
   }
 
   setPanelWidth(widthPx: number): void {
     const [contentWidth] = this.window.getContentSize()
-    this.agentState = {
-      ...this.agentState,
-      panelWidthPx: clampAgentPanelWidth(contentWidth, widthPx),
-    }
+    this.tabManager.setAgentPanelWidth(clampAgentPanelWidth(contentWidth, widthPx))
     this.emitState()
   }
 
   sendAgentCommand(command: AgentShellCommand): void {
-    if (!this.agentState.visible) {
-      this.agentState = { ...this.agentState, visible: true, lastMode: 'full' }
-      this.emitAllState()
-    }
+    this.tabManager.focusAgentTab()
+    this.emitAllState()
     if (this.agentRendererReady && this.agentWebContents && !this.agentWebContents.isDestroyed()) {
       this.agentWebContents.send(APP_PLATFORM_CHANNELS.AGENT_COMMAND_RECEIVED, command)
     } else {
@@ -359,8 +332,27 @@ export class ShellViewManager {
       throw new Error(`Unknown Agent renderer: ${webContentsId}`)
     }
     this.agentRendererReady = true
+    for (const intent of this.queuedAgentNavigationIntents.splice(0)) {
+      this.agentWebContents.send(APP_PLATFORM_CHANNELS.AGENT_NAVIGATION_INTENT_RECEIVED, intent)
+    }
     for (const command of this.queuedAgentCommands.splice(0)) {
       this.agentWebContents.send(APP_PLATFORM_CHANNELS.AGENT_COMMAND_RECEIVED, command)
+    }
+  }
+
+  private applyTabEffects(effects: readonly ShellTabEffect[]): void {
+    for (const effect of effects) {
+      if (effect.type === 'close-app-renderer') {
+        const managed = this.managedTabs.get(effect.tab.id)
+        this.managedTabs.delete(effect.tab.id)
+        if (managed?.webContents && !managed.webContents.isDestroyed()) managed.webContents.close()
+        continue
+      }
+      if (this.agentRendererReady && this.agentWebContents && !this.agentWebContents.isDestroyed()) {
+        this.agentWebContents.send(APP_PLATFORM_CHANNELS.AGENT_NAVIGATION_INTENT_RECEIVED, effect.intent)
+      } else {
+        this.queuedAgentNavigationIntents.push(effect.intent)
+      }
     }
   }
 
@@ -374,7 +366,7 @@ export class ShellViewManager {
     if (this.agentWebContents && !this.agentWebContents.isDestroyed()) {
       this.agentWebContents.send(
         APP_PLATFORM_CHANNELS.AGENT_PRESENTATION_CHANGED,
-        { ...this.agentState }
+        deriveAgentPresentationState(this.getState())
       )
     }
   }
@@ -393,7 +385,9 @@ export class ShellViewManager {
     }
     this.guestWebContents.clear()
     this.pendingGuestDescriptors.length = 0
-    this.tabs.length = 0
+    this.managedTabs.clear()
+    this.queuedAgentCommands.length = 0
+    this.queuedAgentNavigationIntents.length = 0
     this.agentWebContents = null
     this.agentRendererReady = false
     this.homeWebContents = null

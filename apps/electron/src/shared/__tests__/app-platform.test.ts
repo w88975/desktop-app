@@ -1,35 +1,27 @@
 import { describe, expect, it } from 'bun:test'
 import {
   BUILT_IN_APPS,
-  DEFAULT_AGENT_PRESENTATION_STATE,
   clampAgentPanelWidth,
+  deriveAgentPresentationState,
+  getActiveContentTabId,
   getDefaultAgentPanelWidth,
-  reduceAgentPresentation,
   type AgentPresentationState,
   type AppDefinition,
 } from '../app-platform'
 
 describe('app platform shared model', () => {
-  it('starts on Home with Agent hidden and panel as last mode', () => {
-    expect(DEFAULT_AGENT_PRESENTATION_STATE).toEqual({
-      visible: false,
-      lastMode: 'panel',
-      panelWidthPx: 360,
-    })
-  })
-
-  it('follows Agent visibility and presentation transitions', () => {
-    const initial = { ...DEFAULT_AGENT_PRESENTATION_STATE, panelWidthPx: 560 }
-    const panel = reduceAgentPresentation(initial, { type: 'agent-icon' })
-    const full = reduceAgentPresentation(panel, { type: 'header-toggle' })
-    const hiddenFull = reduceAgentPresentation(full, { type: 'agent-icon' })
-
-    expect(panel).toEqual({ visible: true, lastMode: 'panel', panelWidthPx: 560 })
-    expect(full).toEqual({ visible: true, lastMode: 'full', panelWidthPx: 560 })
-    expect(hiddenFull).toEqual({ visible: false, lastMode: 'full', panelWidthPx: 560 })
-    expect(reduceAgentPresentation(hiddenFull, { type: 'agent-icon' }).lastMode).toBe('full')
-    expect(reduceAgentPresentation(full, { type: 'panel-close' })).toEqual(full)
-    expect(reduceAgentPresentation(panel, { type: 'panel-close' }).visible).toBe(false)
+  it('derives Agent presentation and underlying content from explicit shell state', () => {
+    const base = {
+      activeTarget: { kind: 'home' as const },
+      tabs: [],
+      agentPanelVisible: false,
+      previousContentTabId: null,
+      agentPanelWidthPx: 560,
+    }
+    expect(deriveAgentPresentationState(base)).toEqual({ presentation: 'hidden', panelWidthPx: 560 })
+    expect(deriveAgentPresentationState({ ...base, agentPanelVisible: true })).toEqual({ presentation: 'panel', panelWidthPx: 560 })
+    expect(deriveAgentPresentationState({ ...base, activeTarget: { kind: 'agent' } })).toEqual({ presentation: 'full', panelWidthPx: 560 })
+    expect(getActiveContentTabId(base)).toBeNull()
   })
 
   it('defaults panel to 40% and clamps split width', () => {
@@ -52,12 +44,11 @@ describe('app platform shared model', () => {
   it('keeps manifest and Agent state unions narrow', () => {
     const app: AppDefinition = BUILT_IN_APPS.TODO_PLACEHOLDER
     const state: AgentPresentationState = {
-      visible: true,
-      lastMode: 'full',
+      presentation: 'full',
       panelWidthPx: 480,
     }
 
     expect(app.instancePolicy).toBe('single')
-    expect(state.lastMode).toBe('full')
+    expect(state.presentation).toBe('full')
   })
 })

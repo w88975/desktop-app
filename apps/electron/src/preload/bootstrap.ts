@@ -39,6 +39,8 @@ import type { RemoteServerConfig } from '@craft-agent/core/types'
 import type { ElectronAPI } from '../shared/types'
 import {
   APP_PLATFORM_CHANNELS,
+  deriveAgentPresentationState,
+  type AgentNavigationIntent,
   type AgentPresentationState,
   type AgentShellCommand,
   type ShellState,
@@ -419,19 +421,26 @@ client.onConnectionStateChanged((state) => {
 // App lifecycle — direct IPC (not WS RPC) since it restarts the server itself
 ;(api as ElectronAPI).getAgentPresentationState = async () => {
   const state = await ipcRenderer.invoke(APP_PLATFORM_CHANNELS.GET_STATE) as ShellState
-  return state.agent
+  return deriveAgentPresentationState(state)
 }
 ;(api as ElectronAPI).onAgentPresentationChanged = (callback: (state: AgentPresentationState) => void) => {
   const handler = (_event: Electron.IpcRendererEvent, state: AgentPresentationState) => callback(state)
   ipcRenderer.on(APP_PLATFORM_CHANNELS.AGENT_PRESENTATION_CHANGED, handler)
   return () => ipcRenderer.removeListener(APP_PLATFORM_CHANNELS.AGENT_PRESENTATION_CHANGED, handler)
 }
-;(api as ElectronAPI).toggleAgentPresentationMode = () => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.TOGGLE_AGENT_MODE)
-;(api as ElectronAPI).closeAgentPanel = () => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.CLOSE_AGENT_PANEL)
+;(api as ElectronAPI).focusAgentTab = (intent?: AgentNavigationIntent) => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.FOCUS_AGENT_TAB, intent)
+;(api as ElectronAPI).unfocusAgentTab = () => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.UNFOCUS_AGENT_TAB)
+;(api as ElectronAPI).dockAgentAsPanel = () => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.DOCK_AGENT_AS_PANEL)
+;(api as ElectronAPI).toggleAgentPanel = () => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.TOGGLE_AGENT_PANEL)
 ;(api as ElectronAPI).onAgentShellCommand = (callback: (command: AgentShellCommand) => void) => {
   const handler = (_event: Electron.IpcRendererEvent, command: AgentShellCommand) => callback(command)
   ipcRenderer.on(APP_PLATFORM_CHANNELS.AGENT_COMMAND_RECEIVED, handler)
   return () => ipcRenderer.removeListener(APP_PLATFORM_CHANNELS.AGENT_COMMAND_RECEIVED, handler)
+}
+;(api as ElectronAPI).onAgentNavigationIntent = (callback: (intent: AgentNavigationIntent) => void) => {
+  const handler = (_event: Electron.IpcRendererEvent, intent: AgentNavigationIntent) => callback(intent)
+  ipcRenderer.on(APP_PLATFORM_CHANNELS.AGENT_NAVIGATION_INTENT_RECEIVED, handler)
+  return () => ipcRenderer.removeListener(APP_PLATFORM_CHANNELS.AGENT_NAVIGATION_INTENT_RECEIVED, handler)
 }
 ;(api as ElectronAPI).notifyAgentRendererReady = () => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.AGENT_RENDERER_READY)
 

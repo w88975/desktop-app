@@ -13,6 +13,7 @@ apps/electron/resources/pi-agent-server/
 # code coverage
 coverage
 *.lcov
+.codegraph
 
 # logs
 logs

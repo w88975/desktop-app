@@ -1,21 +1,25 @@
 # App Platform Architecture
 
-Status: discovery
+Status: active
 
 This directory records decisions for converting current agent-only Electron app
 into a multi-app desktop shell.
 
 - [`glossary.md`](./glossary.md): shared domain language
 - [`adr/0001-native-multi-renderer-shell.md`](./adr/0001-native-multi-renderer-shell.md): renderer/process boundary
+- [`adr/0003-agent-full-view-as-shell-tab.md`](./adr/0003-agent-full-view-as-shell-tab.md): fixed Agent tab and Panel interaction model
+- [`agent-tab-refactor-plan.md`](./agent-tab-refactor-plan.md): implementation sequence and acceptance criteria
 
 ## Confirmed product requirements
 
-- Persistent top title bar: back, forward, fixed Home, app tabs, Agent entry.
+- Persistent top title bar: back, forward, fixed Home, fixed Agent tab, dynamic
+  app tabs, and right-aligned Agent Panel control.
 - Content region hosts Home plus multiple web apps such as TODO.
 - One global Agent exists. Full view and right-side panel are presentation modes
   of that same Agent, not separate Agent instances.
-- Full mode overlays content region without replacing or unmounting underlying
-  content. It shows sidebar, session list, and conversation.
+- Full Agent behaves as fixed, non-closable tab application. Focusing Agent tab
+  shows sidebar, session list, and conversation. Underlying content remains
+  mounted and running.
 - Panel mode occupies content region's right side. It shows conversation only.
 - Agent state is global. Current conversation does not bind to or switch with
   active app tab.
@@ -24,8 +28,9 @@ into a multi-app desktop shell.
 - Title bar retains current back/forward control UI and click affordances.
 - Home v1 renders only a text placeholder. Launcher, overview, recents, and
   other Home product features are deferred.
-- Agent chat header replaces current Share button with panel/full mode toggle.
-  Existing Close button remains beside it.
+- Agent Panel chat header replaces current Share button with `Open Agent full
+  view`; Full Agent retains reverse `Dock Agent as panel`. Existing chat Close
+  behavior remains.
 - Migration wraps current application in a larger native shell. Current app
   becomes Agent module. Agent business behavior, sessions, workspace semantics,
   backend, and existing functions remain unchanged; only shell ownership and
@@ -43,26 +48,24 @@ into a multi-app desktop shell.
   Workspace changes do not close open app tabs.
 - Current App Logo menu remains at its original position in global title bar.
   It is not moved into Agent sidebar and stays accessible in every surface mode.
-- Final global-title-bar order is App Logo, Back, Forward, fixed Home, app tabs,
-  then right-aligned Agent entry. Global sidebar-toggle control is removed; an
-  Agent-specific sidebar toggle lives inside full Agent UI.
+- Final global-title-bar order is App Logo, Back, Forward, fixed Home, fixed
+  Agent tab, conditional divider, dynamic app tabs, then right-aligned icon-only
+  Agent Panel control. Global sidebar-toggle control is removed; Agent-specific
+  sidebar toggle lives inside Full Agent UI.
 - Agent panel v1 adds no New Conversation action. It preserves current behavior.
   New sessions are created through existing full Agent sidebar flow; panel-level
   creation is deferred.
-- Global Agent icon toggles visibility without changing presentation mode.
-  Hiding records `lastMode`; reopening restores panel or full exactly as last
-  shown. Only chat-header mode toggle changes panel/full mode. Icon is active in
-  either visible mode.
+- With Agent tab unfocused, global Agent icon toggles Panel only. With Agent tab
+  focused, it unfocuses Full Agent and restores previous content without opening
+  Panel. Icon never focuses Full Agent and is active only while Panel is visible.
 - In Agent full mode, active app keeps full content-region bounds and continues
   running. Agent view is stacked above it; shell title bar remains above both.
   Hiding Agent reveals app without resize or reflow.
-- While Full Agent is visible, Home and app tabs do not show active styling.
-  Activating Home or an app tab hides Full Agent immediately and activates the
-  selected content. Panel Agent remains visible when content tabs change.
-- Hidden Agent retains bounds for its `lastMode`. In particular, hidden Full
-  Agent stays full-width so reopening does not paint a compact intermediate
-  layout or trigger a second layout pass.
-- Home is fixed and non-closable. App tabs are closable. Closing destroys that
+- While Agent tab is focused, Home and dynamic app tabs are inactive. Activating
+  Home or an app tab unfocuses Full Agent immediately. Panel remains visible when
+  content tabs change.
+- Home and Agent are fixed and non-closable. Dynamic app tabs are closable.
+  Closing destroys that
   tab renderer. If active tab closes, shell activates nearest tab to its left,
   falling back to Home. Reopening singleton app creates fresh renderer state.
   Agent state is unaffected.
@@ -90,15 +93,16 @@ These decisions are deferred beyond v1 unless required for new layout to work.
 
 - Replace current single-renderer layout with a DOM-owned shell plus isolated
   Electron `<webview>` guests.
-- Build global title bar, fixed placeholder Home, runtime app-tab infrastructure,
-  and persistent Agent renderer with hidden/panel/full modes.
+- Build global title bar, fixed Home and Agent tabs, runtime dynamic app-tab
+  infrastructure, and persistent Agent renderer shared by Panel and Full.
 - Extract current app into Agent module with full/panel UI cropping.
 - Preserve current Agent behavior and backend integration.
 - Start every process at Home; do not restore open app tabs.
 - Defer product details not required for layout or process architecture.
 
-See [`v1-implementation-plan.md`](./v1-implementation-plan.md) for code plan and
-acceptance criteria.
+See [`agent-tab-refactor-plan.md`](./agent-tab-refactor-plan.md) for current code
+plan and acceptance criteria. [`v1-implementation-plan.md`](./v1-implementation-plan.md)
+remains historical baseline for implemented webview-shell migration.
 
 ## Closed decisions
 
@@ -107,6 +111,11 @@ acceptance criteria.
   only; `FullAgentShell` owns sidebar, navigator, and multi-panel layout. Both
   consume the same Jotai/AppShellContext/transport state. No second Agent
   renderer or duplicated business state is created.
+- Dedicated main-process `ShellTabManager` is sole owner of tab/navigation
+  mutations. Its intent operations are atomic and invariant-checked;
+  `ShellViewManager` handles Electron lifecycle/effects and publishes only final
+  committed state. Manager implementation uses Chinese comments for domain
+  rules and transaction boundaries.
 - Home and every open app tab own distinct persistent `<webview>` guests. Tab
   switching changes CSS visibility without reloading. Agent coverage does not
   unmount active content. Memory-pressure eviction is deferred.

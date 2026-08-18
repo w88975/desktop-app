@@ -2,6 +2,11 @@
 
 Status: implemented
 
+> Historical baseline. Agent `lastMode`, generic icon-toggle behavior, and Full
+> overlay interaction below are superseded by
+> [ADR 0003](./adr/0003-agent-full-view-as-shell-tab.md). Use
+> [Agent Tab Refactor Plan](./agent-tab-refactor-plan.md) for next implementation.
+
 ## Goal
 
 Put current Agent application inside a larger Electron shell. Deliver isolated

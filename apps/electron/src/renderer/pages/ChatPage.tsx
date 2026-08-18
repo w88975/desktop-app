@@ -38,7 +38,7 @@ export interface ChatPageProps {
 
 const ChatPage = React.memo(function ChatPage({ sessionId }: ChatPageProps) {
   const { t } = useTranslation()
-  const { isPanel, toggleMode } = useAgentPresentation()
+  const { isPanel, openFullView, dockAsPanel } = useAgentPresentation()
   // Diagnostic: mark when component runs
   React.useLayoutEffect(() => {
     rendererPerf.markSessionSwitch(sessionId, 'panel.mounted')
@@ -644,9 +644,13 @@ const ChatPage = React.memo(function ChatPage({ sessionId }: ChatPageProps) {
     <PanelHeaderCenterButton
       icon={isPanel ? <Maximize2 className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
       tooltip={isPanel ? 'Open Agent full view' : 'Dock Agent as panel'}
-      onClick={() => { void toggleMode() }}
+      onClick={() => {
+        void (isPanel
+          ? openFullView({ type: 'conversation', sessionId })
+          : dockAsPanel())
+      }}
     />
-  ), [isPanel, toggleMode])
+  ), [dockAsPanel, isPanel, openFullView, sessionId])
 
   const primaryHeaderAction = modeToggleButton
   const headerActions = editTaskButton ? (

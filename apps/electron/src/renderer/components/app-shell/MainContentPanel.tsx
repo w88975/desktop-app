@@ -56,7 +56,7 @@ import { DEFAULT_MODEL } from '@config/models'
 import type { FileAttachment, PermissionMode } from '../../../shared/types'
 
 function AgentNewConversationState() {
-  const { toggleMode } = useAgentPresentation()
+  const { openFullView } = useAgentPresentation()
   const {
     rightSidebarButton,
     activeWorkspaceId,
@@ -120,7 +120,7 @@ function AgentNewConversationState() {
           <PanelHeaderCenterButton
             icon={<Maximize2 className="h-4 w-4" />}
             tooltip="Open Agent full view"
-            onClick={() => { void toggleMode() }}
+            onClick={() => { void openFullView() }}
           />
         )}
         rightSidebarButton={rightSidebarButton}

@@ -14,7 +14,8 @@ const api: ShellAPI = {
   openApp: (appId) => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.OPEN_APP, appId),
   activateTab: (tabId) => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.ACTIVATE_TAB, tabId),
   closeTab: (tabId) => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.CLOSE_TAB, tabId),
-  toggleAgent: () => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.TOGGLE_AGENT),
+  focusAgentTab: (intent) => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.FOCUS_AGENT_TAB, intent),
+  toggleAgentPanel: () => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.TOGGLE_AGENT_PANEL),
   setPanelWidth: (widthPx) => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.SET_PANEL_WIDTH, widthPx),
   sendAgentCommand: (command: AgentShellCommand) => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.AGENT_COMMAND, command),
   onStateChanged: (callback: (state: ShellState) => void) => {

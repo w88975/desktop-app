@@ -1,9 +1,8 @@
 import React from 'react'
-import type { AgentPresentationState } from '../../shared/app-platform'
+import type { AgentNavigationIntent, AgentPresentationState } from '../../shared/app-platform'
 
 const FALLBACK_STATE: AgentPresentationState = {
-  visible: true,
-  lastMode: 'full',
+  presentation: 'full',
   panelWidthPx: 360,
 }
 
@@ -11,7 +10,8 @@ interface AgentPresentationContextValue {
   state: AgentPresentationState
   isPanel: boolean
   isFull: boolean
-  toggleMode(): Promise<void>
+  openFullView(intent?: AgentNavigationIntent): Promise<void>
+  dockAsPanel(): Promise<void>
   closePanel(): Promise<void>
 }
 
@@ -19,7 +19,8 @@ const AgentPresentationContext = React.createContext<AgentPresentationContextVal
   state: FALLBACK_STATE,
   isPanel: false,
   isFull: true,
-  toggleMode: async () => {},
+  openFullView: async () => {},
+  dockAsPanel: async () => {},
   closePanel: async () => {},
 })
 
@@ -35,10 +36,11 @@ export function AgentPresentationProvider({ children }: { children: React.ReactN
 
   const value = React.useMemo<AgentPresentationContextValue>(() => ({
     state,
-    isPanel: state.lastMode === 'panel',
-    isFull: state.lastMode === 'full',
-    toggleMode: () => window.electronAPI.toggleAgentPresentationMode(),
-    closePanel: () => window.electronAPI.closeAgentPanel(),
+    isPanel: state.presentation === 'panel',
+    isFull: state.presentation === 'full',
+    openFullView: (intent) => window.electronAPI.focusAgentTab(intent),
+    dockAsPanel: () => window.electronAPI.dockAgentAsPanel(),
+    closePanel: () => window.electronAPI.toggleAgentPanel(),
   }), [state])
 
   return <AgentPresentationContext.Provider value={value}>{children}</AgentPresentationContext.Provider>

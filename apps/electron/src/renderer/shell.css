@@ -90,6 +90,7 @@ button { font: inherit; color: inherit; }
    the tinted title bar. An active tab therefore does not take hover. */
 .agent-button:hover,
 .home-tab:not(.active):hover,
+.agent-tab:not(.active):hover,
 .app-tab:not(.active):hover {
   background: color-mix(in srgb, var(--foreground) 5%, transparent);
   color: var(--foreground);
@@ -97,13 +98,16 @@ button { font: inherit; color: inherit; }
 
 .agent-button:focus-visible,
 .home-tab:focus-visible,
+.agent-tab:focus-visible,
 .app-tab:focus-visible {
   outline: 1px solid var(--ring);
 }
 
 .home-tab,
+.agent-tab,
 .app-tab,
 .agent-button {
+  -webkit-app-region: no-drag;
   height: 28px;
   border: 0;
   border-radius: 6px;
@@ -123,6 +127,7 @@ button { font: inherit; color: inherit; }
    tab and its content read as one plane. The flat ring supplies the edge the
    3% lightness gap alone cannot. */
 .home-tab.active,
+.agent-tab.active,
 .app-tab.active {
   background: var(--background);
   box-shadow: var(--shadow-minimal-flat);
@@ -136,17 +141,48 @@ button { font: inherit; color: inherit; }
   color: var(--foreground);
 }
 
-.tabs {
+.tab-strip {
   display: flex;
+  flex: 1;
   min-width: 0;
+  align-items: center;
   gap: 2px;
   overflow: hidden;
 }
 
-.app-tab { max-width: 190px; }
+.home-tab,
+.agent-tab {
+  flex: none;
+}
+
+.tab-group-divider {
+  width: 1px;
+  height: 16px;
+  flex: none;
+  margin: 0 4px;
+  background: color-mix(in srgb, var(--foreground) 14%, transparent);
+}
+
+.tabs {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar { display: none; }
+
+.app-tab {
+  max-width: 190px;
+  flex: none;
+}
 .app-tab > span:first-child { overflow: hidden; text-overflow: ellipsis; }
 
 .tab-close {
+  -webkit-app-region: no-drag;
   display: grid;
   place-items: center;
   border-radius: 4px;
@@ -154,7 +190,13 @@ button { font: inherit; color: inherit; }
 }
 
 .tab-close:hover { background: color-mix(in srgb, var(--foreground) 8%, transparent); }
-.agent-button { margin-left: auto; }
+.agent-button {
+  width: 28px;
+  flex: none;
+  justify-content: center;
+  margin-left: 2px;
+  padding: 0;
+}
 
 .surface-layout {
   position: absolute;
@@ -171,11 +213,14 @@ button { font: inherit; color: inherit; }
   bottom: var(--panel-edge-inset);
   left: var(--panel-edge-inset);
   min-width: 0;
-  transition: right 120ms ease-out;
 }
 
 .app-region.with-agent-panel {
   right: calc(var(--agent-panel-width) + var(--panel-edge-inset) + var(--panel-gap));
+}
+
+.app-region.panel-transition {
+  transition: right 120ms ease-out;
 }
 
 html[data-resizing="true"] .app-region {

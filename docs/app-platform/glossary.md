@@ -21,18 +21,22 @@ app tabs. Ordinary app renderers require explicit capability to access workspace
 
 ## Title bar
 
-Persistent navigation surface. Owns history controls, fixed Home entry, app tab
-strip, and Agent entry. Not part of any hosted app. Back/forward controls reuse
-current UI; history behavior remains unspecified. Current App Logo menu remains
-at its original global-title-bar position. Order is App Logo, Back, Forward,
-Home, app tabs, and right-aligned Agent entry.
+Persistent navigation surface. Owns history controls, fixed Home and Agent tabs,
+dynamic app-tab strip, and global Agent icon. Not part of any hosted app.
+Back/forward controls reuse current UI; history behavior remains unspecified.
+Current App Logo menu remains at its original global-title-bar position. Order
+is App Logo, Back, Forward, fixed Home, fixed Agent tab, dynamic app tabs, then
+right-aligned global Agent icon. A vertical divider between Agent tab and dynamic
+app tabs separates fixed navigation from runtime tabs. Divider is decorative and
+exists only while at least one dynamic app tab is open.
 
 ## App module
 
 Installable or built-in web application exposed through one or more tabs. TODO
-is example app module. Agent is not an app module. Module manifest declares
-whether it permits one tab or multiple tab instances. Version 1 app modules are
-built-in, locally packaged, and first-party only.
+is example app module. Agent behaves as fixed tab application but is not a
+dynamic `AppDefinition` module and owns no separate tab renderer. Module manifest
+declares whether it permits one tab or multiple tab instances. Version 1 app
+modules are built-in, locally packaged, and first-party only.
 
 ## Capability allowlist
 
@@ -54,6 +58,20 @@ to left, then Home fallback.
 Version 1 tabs are runtime-only. Process restart discards tab list, order, and
 active selection.
 
+## Fixed tab
+
+Permanent, non-closable title-bar navigation target. Home and Agent are fixed
+tabs. They share tablist selection and keyboard behavior with dynamic app tabs
+but ignore close operations and are not members of runtime `tabs` collection.
+
+## Shell Tab Manager
+
+Pure main-process domain owner implemented in `shell-tab-manager.ts`. Owns fixed
+and dynamic tab focus, Agent Panel visibility, previous-content fallback, and tab
+metadata transitions. Each intent builds a copied next state, validates all
+invariants, commits once, and returns explicit effects for `ShellViewManager` to
+apply. It never owns Electron web contents or emits partial UI state.
+
 ## Content region
 
 Area below title bar. Shows active Home or app tab. May remain rendered while
@@ -72,9 +90,59 @@ presentation mode. Mode changes preserve current session and in-progress work.
 
 ## Agent full mode
 
-Presentation containing sidebar, session list, and conversation workspace.
-Covers content region when visible. It preserves current application layout
-below old `TopBar`; global shell title bar remains above it.
+Presentation containing sidebar, session list, and conversation workspace,
+hosted by fixed Agent tab. It uses same persistent Agent renderer and state as
+Agent Panel. Switching away hides Full Agent while Agent tab remains available.
+
+## Agent tab
+
+Fixed, non-closable shell-tab projection of global Agent full presentation,
+analogous to fixed Home. It is not an app module and does not own a separate
+renderer. Unfocusing it hides Full Agent while preserving Agent renderer,
+conversation state, and in-progress work. Active styling means Full Agent is
+focused; it uses tab-selection semantics.
+
+## Previous content target
+
+Home or app tab active immediately before Agent tab gains focus. Unfocusing Agent
+tab restores this target. If target app tab no longer exists, shell activates
+rightmost remaining app tab, then Home. Suggested state field is
+`previousContentTabId`, where `null` represents Home.
+
+## Agent presentation transition
+
+Atomic shell-state change between Agent Panel and focused Agent tab. Same Agent
+renderer remains mounted. Shell must not expose an intermediate state where both
+presentations are visible or where app content visibly resizes before Full Agent
+covers it. Panel appearance and disappearance retain matching 120ms animation;
+transitions involving Full Agent do not.
+
+## Agent presentation command
+
+Explicit shell command for one transition: toggle Panel, focus Agent tab,
+unfocus Agent tab, or dock Full Agent as Panel. Generic presentation-mode toggle
+APIs are excluded because they cannot express fixed-tab focus semantics.
+
+## Agent navigation intent
+
+Optional Full Agent destination attached to a focus transition. Direct fixed-tab
+activation has no new intent and restores last Full route. Panel expansion and
+shell commands carry explicit conversation or feature destinations. It changes
+navigation only, never Agent renderer identity.
+
+## Full-only Agent command
+
+Shell command requiring Full Agent navigation: new session, settings, shortcuts,
+or sidebar toggle. Shell focuses fixed Agent tab before dispatch. If Agent Panel
+is visible, transition closes it atomically. Command waits for Agent renderer
+readiness and is never rendered transiently inside Panel.
+
+## Initial active target
+
+Shell navigation target selected by window-creation intent. Ordinary windows
+start on Home with Agent Panel hidden. Focused-session windows, Full-only command
+deep links, and required Agent onboarding start on fixed Agent tab. It replaces
+legacy `initialAgentMode`, which conflates navigation with presentation.
 
 ## Agent panel mode
 
@@ -91,19 +159,36 @@ DOM bounds of both `<webview>` elements; neither guest renderer owns it.
 
 ## Agent mode toggle
 
-Control replacing current chat-header Share button. Switches same Agent
-`<webview>` between panel and full DOM bounds without reload.
+Panel chat-header control replacing current Share button. It focuses fixed Agent
+tab and switches same Agent `<webview>` from Panel to Full without reload. Full
+Agent reverse control unfocuses Agent tab, restores previous content target, and
+opens Agent Panel.
+
+## Global Agent icon
+
+Title-bar control for Agent presence, not Full Agent navigation. With Agent tab
+unfocused, it toggles Agent Panel. With Agent tab focused, it unfocuses Agent tab
+and restores previous content target without opening Panel. It never focuses Agent
+tab. Active styling means Agent Panel is visible; it uses toggle-button
+semantics. It is icon-only; stateful tooltip and accessible label describe open
+Panel, close Panel, or exit Full action.
 
 ## Agent hidden mode
 
-Agent renderer remains alive but invisible. Entered by Close from panel mode.
-Underlying active app receives full content-region width. Hidden state records
-`lastMode`, restored by next global Agent-icon activation.
+Agent renderer remains alive but invisible. Agent tab is unfocused and Agent
+Panel is hidden. Underlying active app receives full content-region width. Next
+global Agent-icon activation opens Panel; it never restores Full from history.
 
 ## Agent last mode
 
-Most recent visible presentation, `panel` or `full`. Global Agent icon changes
-visibility only; it hides current mode or restores `lastMode`.
+Removed legacy presentation history. Target architecture derives presentation
+from active shell target and explicit Agent Panel visibility.
+
+## Active target
+
+Exactly one focused shell navigation target: Home, dynamic app tab, or fixed
+Agent tab. Full Agent exists when active target is Agent. This replaces using
+Agent visibility as an overlay on separately active tab selection.
 
 ## New Conversation state
 

@@ -30,9 +30,12 @@ type ApiToChannelMapKeys = Exclude<
   | 'getFilePath' // renderer-local — webUtils.getPathForFile, no IPC round-trip
   | 'getAgentPresentationState' // direct app-platform IPC
   | 'onAgentPresentationChanged' // direct app-platform IPC listener
-  | 'toggleAgentPresentationMode' // direct app-platform IPC
-  | 'closeAgentPanel' // direct app-platform IPC
+  | 'focusAgentTab' // direct app-platform IPC
+  | 'unfocusAgentTab' // direct app-platform IPC
+  | 'dockAgentAsPanel' // direct app-platform IPC
+  | 'toggleAgentPanel' // direct app-platform IPC
   | 'onAgentShellCommand' // direct app-platform IPC listener
+  | 'onAgentNavigationIntent' // direct app-platform IPC listener
   | 'notifyAgentRendererReady' // direct app-platform IPC
 > | BrowserPaneKeys
 type ChannelMapKeys = keyof typeof CHANNEL_MAP & string

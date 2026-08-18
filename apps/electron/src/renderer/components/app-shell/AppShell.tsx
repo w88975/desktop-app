@@ -492,15 +492,27 @@ function FilterLabelItems({
  */
 export function AppShell(props: AppShellProps) {
   const { isPanel } = useAgentPresentation()
+  const { onOpenSettings, onOpenKeyboardShortcuts } = props.contextValue
 
   useEffect(() => {
     const api = window.electronAPI
-    const unsubscribe = api.onAgentShellCommand((command: AgentShellCommand) => {
-      window.dispatchEvent(new CustomEvent('agent-shell-command', { detail: command }))
+    const unsubscribeNavigation = api.onAgentNavigationIntent((intent) => {
+      if (intent.type === 'conversation') navigate(routes.view.allSessions(intent.sessionId))
     })
     void api.notifyAgentRendererReady()
-    return unsubscribe
+    return unsubscribeNavigation
   }, [])
+
+  useEffect(() => window.electronAPI.onAgentShellCommand((command: AgentShellCommand) => {
+    if (command === 'new-session') navigate(routes.action.newSession())
+    else if (command === 'open-settings') onOpenSettings()
+    else if (command === 'open-shortcuts') onOpenKeyboardShortcuts()
+    else if (command === 'toggle-sidebar') {
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new CustomEvent('agent-shell-command', { detail: command }))
+      })
+    }
+  }), [onOpenKeyboardShortcuts, onOpenSettings])
 
   return (
     <EscapeInterruptProvider>
@@ -2094,14 +2106,11 @@ export function FullAgentShell({
   useEffect(() => {
     const handleCommand = (event: Event) => {
       const command = (event as CustomEvent<AgentShellCommand>).detail
-      if (command === 'new-session') handleNewChat()
-      else if (command === 'open-settings') onOpenSettings()
-      else if (command === 'open-shortcuts') onOpenKeyboardShortcuts()
-      else if (command === 'toggle-sidebar') handleToggleSidebar()
+      if (command === 'toggle-sidebar') handleToggleSidebar()
     }
     window.addEventListener('agent-shell-command', handleCommand)
     return () => window.removeEventListener('agent-shell-command', handleCommand)
-  }, [handleNewChat, onOpenSettings, onOpenKeyboardShortcuts, handleToggleSidebar])
+  }, [handleToggleSidebar])
 
   // Unified sidebar items: nav buttons only (agents system removed)
   type SidebarItem = {

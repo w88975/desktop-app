@@ -527,14 +527,17 @@ app.whenReady().then(async () => {
     ipcMain.handle(APP_PLATFORM_CHANNELS.CLOSE_TAB, (event, tabId: string) =>
       getShellViews(event.sender.id, ['shell']).closeTab(tabId)
     )
-    ipcMain.handle(APP_PLATFORM_CHANNELS.TOGGLE_AGENT, event =>
-      getShellViews(event.sender.id, ['shell']).toggleAgent()
+    ipcMain.handle(APP_PLATFORM_CHANNELS.TOGGLE_AGENT_PANEL, event =>
+      getShellViews(event.sender.id, ['shell', 'agent']).toggleAgentPanel()
     )
-    ipcMain.handle(APP_PLATFORM_CHANNELS.TOGGLE_AGENT_MODE, event =>
-      getShellViews(event.sender.id, ['agent']).toggleAgentMode()
+    ipcMain.handle(APP_PLATFORM_CHANNELS.FOCUS_AGENT_TAB, (event, intent) =>
+      getShellViews(event.sender.id, ['shell', 'agent']).focusAgentTab(intent)
     )
-    ipcMain.handle(APP_PLATFORM_CHANNELS.CLOSE_AGENT_PANEL, event =>
-      getShellViews(event.sender.id, ['agent']).closeAgentPanel()
+    ipcMain.handle(APP_PLATFORM_CHANNELS.UNFOCUS_AGENT_TAB, event =>
+      getShellViews(event.sender.id, ['shell', 'agent']).unfocusAgentTab()
+    )
+    ipcMain.handle(APP_PLATFORM_CHANNELS.DOCK_AGENT_AS_PANEL, event =>
+      getShellViews(event.sender.id, ['agent']).dockAgentAsPanel()
     )
     ipcMain.handle(APP_PLATFORM_CHANNELS.SET_PANEL_WIDTH, (event, widthPx: number) =>
       getShellViews(event.sender.id, ['shell']).setPanelWidth(widthPx)

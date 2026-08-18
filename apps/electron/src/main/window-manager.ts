@@ -334,7 +334,7 @@ export class WindowManager {
     const shellViewManager = new ShellViewManager({
       window,
       workspaceId,
-      initialAgentMode: focused || !workspaceId ? 'full' : 'hidden',
+      initialActiveTarget: focused || !workspaceId ? 'agent' : 'home',
       registerSurface: (surfaceWebContentsId, kind, tabId) => {
         this.registerSurface(webContentsId, surfaceWebContentsId, kind, tabId)
       },

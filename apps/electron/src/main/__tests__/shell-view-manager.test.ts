@@ -62,7 +62,7 @@ describe('ShellViewManager webview lifecycle', () => {
     const manager = new ShellViewManager({
       window: createWindow() as any,
       workspaceId: 'ws-1',
-      initialAgentMode: 'hidden',
+      initialActiveTarget: 'home',
       registerSurface: (id, kind, tabId) => registered.push({ id, kind, tabId }),
       unregisterSurface: id => unregistered.push(id),
     })
@@ -76,7 +76,7 @@ describe('ShellViewManager webview lifecycle', () => {
     const first = manager.getState().tabs[0]
     manager.openApp('todo-placeholder')
     expect(manager.getState().tabs).toHaveLength(1)
-    expect(manager.getState().activeTabId).toBe(first.id)
+    expect(manager.getState().activeTarget).toEqual({ kind: 'app', tabId: first.id })
 
     const appGuest = createGuest(12, addQuery(bootstrap.appHostSrc, {
       appId: 'todo-placeholder',
@@ -86,7 +86,7 @@ describe('ShellViewManager webview lifecycle', () => {
     expect(manager.getState().tabs[0].webContentsId).toBe(12)
 
     manager.closeTab(first.id)
-    expect(manager.getState()).toMatchObject({ activeTabId: null, tabs: [] })
+    expect(manager.getState()).toMatchObject({ activeTarget: { kind: 'home' }, tabs: [] })
     expect(appGuest.close).toHaveBeenCalled()
     expect(unregistered).toContain(12)
 
@@ -94,19 +94,22 @@ describe('ShellViewManager webview lifecycle', () => {
     expect(manager.getState().tabs[0].id).not.toBe(first.id)
   })
 
-  it('preserves last Agent mode and queues commands until Agent renderer is ready', () => {
+  it('uses explicit Agent focus and queues commands/intents until renderer is ready', () => {
     const manager = new ShellViewManager({
       window: createWindow() as any,
       workspaceId: 'ws-1',
-      initialAgentMode: 'hidden',
+      initialActiveTarget: 'home',
       registerSurface: () => {},
       unregisterSurface: () => {},
     })
 
-    manager.toggleAgent()
-    manager.toggleAgentMode()
-    manager.toggleAgent()
-    expect(manager.getState().agent).toMatchObject({ visible: false, lastMode: 'full' })
+    manager.toggleAgentPanel()
+    expect(manager.getState().agentPanelVisible).toBe(true)
+    manager.focusAgentTab({ type: 'conversation', sessionId: 'session-1' })
+    expect(manager.getState()).toMatchObject({
+      activeTarget: { kind: 'agent' },
+      agentPanelVisible: false,
+    })
 
     manager.sendAgentCommand('open-settings')
     const agent = createGuest(20, manager.getWebviewBootstrap().agentSrc)
@@ -114,6 +117,10 @@ describe('ShellViewManager webview lifecycle', () => {
     expect(agent.send).not.toHaveBeenCalledWith('app-platform:agent-command-received', 'open-settings')
 
     manager.markAgentRendererReady(20)
+    expect(agent.send).toHaveBeenCalledWith(
+      'app-platform:agent-navigation-intent-received',
+      { type: 'conversation', sessionId: 'session-1' }
+    )
     expect(agent.send).toHaveBeenCalledWith('app-platform:agent-command-received', 'open-settings')
 
     manager.sendAgentCommand('open-shortcuts')
@@ -126,30 +133,30 @@ describe('ShellViewManager webview lifecycle', () => {
     expect(agent.send).toHaveBeenCalledWith('app-platform:agent-command-received', 'new-session')
   })
 
-  it('hides visible Full Agent when Home or an app tab is activated', () => {
+  it('unfocuses Full Agent when Home or an app tab is activated', () => {
     const manager = new ShellViewManager({
       window: createWindow() as any,
       workspaceId: 'ws-1',
-      initialAgentMode: 'full',
+      initialActiveTarget: 'agent',
       registerSurface: () => {},
       unregisterSurface: () => {},
     })
 
     manager.activateHome()
     expect(manager.getState()).toMatchObject({
-      activeTabId: null,
-      agent: { visible: false, lastMode: 'full' },
+      activeTarget: { kind: 'home' },
+      agentPanelVisible: false,
     })
 
     manager.openApp('todo-placeholder')
     const tabId = manager.getState().tabs[0].id
-    manager.toggleAgent()
-    expect(manager.getState().agent.visible).toBe(true)
+    manager.focusAgentTab()
+    expect(manager.getState().activeTarget).toEqual({ kind: 'agent' })
 
     manager.activateTab(tabId)
     expect(manager.getState()).toMatchObject({
-      activeTabId: tabId,
-      agent: { visible: false, lastMode: 'full' },
+      activeTarget: { kind: 'app', tabId },
+      agentPanelVisible: false,
     })
   })
 })

@@ -1,7 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import { Bot, ChevronLeft, ChevronRight, Home, Keyboard, ListTodo, Settings, X } from 'lucide-react'
-import { AGENT_PANEL_DEFAULT_RATIO, type ShellState, type WebviewSurfaceBootstrap } from '../shared/app-platform'
+import {
+  AGENT_PANEL_DEFAULT_RATIO,
+  getActiveContentTabId,
+  type ShellState,
+  type WebviewSurfaceBootstrap,
+} from '../shared/app-platform'
 import { CraftAgentsSymbol } from './components/icons/CraftAgentsSymbol'
 import { SquarePenRounded } from './components/icons/SquarePenRounded'
 import { TopBarButton } from './components/ui/TopBarButton'
@@ -20,9 +25,11 @@ import './index.css'
 import './shell.css'
 
 const EMPTY_STATE: ShellState = {
-  activeTabId: null,
+  activeTarget: { kind: 'home' },
   tabs: [],
-  agent: { visible: false, lastMode: 'panel', panelWidthPx: 360 },
+  agentPanelVisible: false,
+  previousContentTabId: null,
+  agentPanelWidthPx: 360,
 }
 
 function withQuery(base: string, params: Record<string, string>): string {
@@ -140,6 +147,8 @@ function ShellResizeSash({ panelWidth }: { panelWidth: number }) {
 function Shell() {
   const [state, setState] = useState<ShellState>(EMPTY_STATE)
   const [bootstrap, setBootstrap] = useState<WebviewSurfaceBootstrap | null>(null)
+  const previousPanelVisibleRef = useRef(false)
+  const previousFullVisibleRef = useRef(false)
 
   useEffect(() => {
     void Promise.all([
@@ -153,7 +162,7 @@ function Shell() {
   }, [])
 
   useEffect(() => {
-    if (!state.agent.visible || state.agent.lastMode !== 'panel') return
+    if (!state.agentPanelVisible) return
     const onPointerMove = (event: PointerEvent) => {
       if (document.documentElement.dataset.resizing !== 'true') return
       void window.shellAPI.setPanelWidth(window.innerWidth - event.clientX)
@@ -165,7 +174,7 @@ function Shell() {
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', stop)
     }
-  }, [state.agent.visible, state.agent.lastMode])
+  }, [state.agentPanelVisible])
 
   const appHostSources = useMemo(() => {
     if (!bootstrap) return null
@@ -178,17 +187,40 @@ function Shell() {
     }
   }, [bootstrap, state.tabs])
 
-  const panelVisible = state.agent.visible && state.agent.lastMode === 'panel'
-  const fullVisible = state.agent.visible && state.agent.lastMode === 'full'
-  const fullSized = state.agent.lastMode === 'full'
+  const panelVisible = state.agentPanelVisible
+  const fullVisible = state.activeTarget.kind === 'agent'
+  // Hidden Agent 保持 Full bounds；再次 focus Agent tab 时不会先绘制窄版布局。
+  const fullSized = !panelVisible
+  const activeContentTabId = getActiveContentTabId(state)
+  const animatePanelTransition = !fullVisible
+    && !previousFullVisibleRef.current
+    && panelVisible !== previousPanelVisibleRef.current
+  const agentButtonLabel = fullVisible
+    ? 'Exit Agent full view'
+    : panelVisible ? 'Close Agent panel' : 'Open Agent panel'
+
+  const handleTabListKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]'))
+    const index = tabs.indexOf(document.activeElement as HTMLElement)
+    if (index < 0) return
+    event.preventDefault()
+    const offset = event.key === 'ArrowRight' ? 1 : -1
+    tabs[(index + offset + tabs.length) % tabs.length]?.focus()
+  }
+
+  useEffect(() => {
+    previousPanelVisibleRef.current = panelVisible
+    previousFullVisibleRef.current = fullVisible
+  }, [fullVisible, panelVisible])
 
   return (
     <main
       className="shell-root"
-      data-agent-visible={state.agent.visible || undefined}
-      data-agent-mode={state.agent.lastMode}
+      data-agent-visible={(panelVisible || fullVisible) || undefined}
+      data-agent-mode={fullVisible ? 'full' : panelVisible ? 'panel' : 'hidden'}
       style={{
-        '--agent-panel-width': `${state.agent.panelWidthPx}px`,
+        '--agent-panel-width': `${state.agentPanelWidthPx}px`,
         '--panel-gap': `${PANEL_GAP}px`,
         '--panel-edge-inset': `${PANEL_EDGE_INSET}px`,
         '--radius-edge': `${RADIUS_EDGE}px`,
@@ -199,47 +231,74 @@ function Shell() {
         <div className="no-drag"><AppLogoMenu /></div>
         <TopBarButton aria-label="Back"><ChevronLeft className="h-[18px] w-[18px]" strokeWidth={1.5} /></TopBarButton>
         <TopBarButton aria-label="Forward"><ChevronRight className="h-[18px] w-[18px]" strokeWidth={1.5} /></TopBarButton>
-        <button
-          className={`home-tab no-drag ${!fullVisible && state.activeTabId === null ? 'active' : ''}`}
-          onClick={() => void window.shellAPI.activateHome()}
-        >
-          <Home size={15} /><span>Home</span>
-        </button>
-        <nav className="tabs no-drag">
-          {state.tabs.map(tab => (
+        <nav className="tab-strip" role="tablist" aria-label="Application tabs" onKeyDown={handleTabListKeyDown}>
+          <button
+            role="tab"
+            aria-selected={state.activeTarget.kind === 'home'}
+            tabIndex={state.activeTarget.kind === 'home' ? 0 : -1}
+            className={`home-tab ${state.activeTarget.kind === 'home' ? 'active' : ''}`}
+            onClick={() => void window.shellAPI.activateHome()}
+          >
+            <Home size={15} /><span>Home</span>
+          </button>
+          <button
+            role="tab"
+            aria-selected={fullVisible}
+            tabIndex={fullVisible ? 0 : -1}
+            className={`agent-tab ${fullVisible ? 'active' : ''}`}
+            onClick={() => void window.shellAPI.focusAgentTab()}
+          >
+            <Bot size={15} /><span>Agent</span>
+          </button>
+          {state.tabs.length > 0 && <span className="tab-group-divider" aria-hidden="true" />}
+          <div className="tabs" role="presentation">
+            {state.tabs.map(tab => (
             <button
               key={tab.id}
-              className={`app-tab ${!fullVisible && state.activeTabId === tab.id ? 'active' : ''}`}
+              role="tab"
+              aria-selected={state.activeTarget.kind === 'app' && state.activeTarget.tabId === tab.id}
+              tabIndex={state.activeTarget.kind === 'app' && state.activeTarget.tabId === tab.id ? 0 : -1}
+              className={`app-tab ${state.activeTarget.kind === 'app' && state.activeTarget.tabId === tab.id ? 'active' : ''}`}
               onClick={() => void window.shellAPI.activateTab(tab.id)}
             >
               <span>{tab.title}</span>
               <span
                 className="tab-close"
                 role="button"
+                tabIndex={0}
                 aria-label={`Close ${tab.title}`}
                 onClick={(event) => { event.stopPropagation(); void window.shellAPI.closeTab(tab.id) }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return
+                  event.preventDefault()
+                  event.stopPropagation()
+                  void window.shellAPI.closeTab(tab.id)
+                }}
               ><X size={13} /></span>
             </button>
-          ))}
+            ))}
+          </div>
         </nav>
-        <button
-          className={`agent-button no-drag ${state.agent.visible ? 'active' : ''}`}
-          aria-pressed={state.agent.visible}
-          onClick={() => void window.shellAPI.toggleAgent()}
+        <TopBarButton
+          className={`agent-button no-drag ${panelVisible ? 'active' : ''}`}
+          aria-label={agentButtonLabel}
+          title={agentButtonLabel}
+          aria-pressed={panelVisible}
+          onClick={() => void window.shellAPI.toggleAgentPanel()}
         >
-          <Bot size={16} /><span>Agent</span>
-        </button>
+          <Bot size={16} />
+        </TopBarButton>
       </header>
 
       <section className="surface-layout">
-        <div className={`app-region ${panelVisible ? 'with-agent-panel' : ''}`}>
+        <div className={`app-region ${panelVisible ? 'with-agent-panel' : ''} ${animatePanelTransition ? 'panel-transition' : ''}`}>
           {bootstrap && appHostSources && (
             <>
               <SurfaceWebview
                 src={appHostSources.home}
                 preload={bootstrap.appHostPreload}
                 ariaLabel="Home"
-                className={`surface-webview app-surface ${state.activeTabId === null ? 'surface-active' : ''}`}
+                className={`surface-webview app-surface ${activeContentTabId === null ? 'surface-active' : ''}`}
               />
               {state.tabs.map(tab => (
                 <SurfaceWebview
@@ -247,7 +306,7 @@ function Shell() {
                   src={appHostSources.tabs.get(tab.id)!}
                   preload={bootstrap.appHostPreload}
                   ariaLabel={tab.title}
-                  className={`surface-webview app-surface ${state.activeTabId === tab.id ? 'surface-active' : ''}`}
+                  className={`surface-webview app-surface ${activeContentTabId === tab.id ? 'surface-active' : ''}`}
                 />
               ))}
             </>
@@ -264,7 +323,7 @@ function Shell() {
         )}
 
         {panelVisible && (
-          <ShellResizeSash panelWidth={state.agent.panelWidthPx} />
+          <ShellResizeSash panelWidth={state.agentPanelWidthPx} />
         )}
       </section>
     </main>
