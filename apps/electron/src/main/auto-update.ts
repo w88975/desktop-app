@@ -26,6 +26,7 @@ import {
   clearDismissedUpdateVersion,
 } from '@craft-agent/shared/config'
 import { readJsonFileSync } from '@craft-agent/shared/utils/files'
+import { FEATURE_FLAGS } from '@craft-agent/shared/feature-flags'
 import { RPC_CHANNELS, type UpdateInfo } from '../shared/types'
 import type { EventSink } from '@craft-agent/server-core/transport'
 
@@ -357,6 +358,11 @@ function checkForExistingDownload(): { exists: boolean; version?: string } {
  * @param options.autoDownload - If false, only checks without downloading (for manual "Check Now")
  */
 export async function checkForUpdates(options: CheckOptions = {}): Promise<UpdateInfo> {
+  if (!FEATURE_FLAGS.autoUpdate) {
+    autoUpdateLog.info('Auto-update disabled — skipping update check')
+    return updateInfo
+  }
+
   const { autoDownload = true } = options
 
   // Temporarily override autoDownload for this check if needed
@@ -412,6 +418,10 @@ export async function checkForUpdates(options: CheckOptions = {}): Promise<Updat
  * Then relaunches the app automatically.
  */
 export async function installUpdate(): Promise<void> {
+  if (!FEATURE_FLAGS.autoUpdate) {
+    throw new Error('Auto-update is disabled')
+  }
+
   if (updateInfo.downloadState !== 'ready') {
     throw new Error('No update ready to install')
   }
@@ -491,6 +501,11 @@ export interface UpdateOnLaunchResult {
  * - Auto-downloads if update available
  */
 export async function checkForUpdatesOnLaunch(): Promise<UpdateOnLaunchResult> {
+  if (!FEATURE_FLAGS.autoUpdate) {
+    autoUpdateLog.info('Auto-update disabled — skipping launch update check')
+    return { action: 'skipped', reason: 'auto-update-disabled' }
+  }
+
   autoUpdateLog.info('Checking for updates on launch...')
 
   const info = await checkForUpdates({ autoDownload: true })

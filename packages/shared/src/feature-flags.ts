@@ -59,6 +59,22 @@ export function isEmbeddedServerEnabled(): boolean {
   return false;
 }
 
+/**
+ * Runtime-evaluated check for the in-app auto-update pipeline.
+ *
+ * Disabled: this fork has no release channel of its own, and the upstream feed
+ * (agents.craft.do) must never be reached — it would ship Craft Agents builds to
+ * our users. Everything stays wired up behind this flag; flip it (or set
+ * CRAFT_FEATURE_AUTO_UPDATE=1) once our own update server is in place, after
+ * repointing `publish.url` in apps/electron/electron-builder.yml and
+ * VERSIONS_URL in packages/shared/src/version/manifest.ts.
+ */
+export function isAutoUpdateEnabled(): boolean {
+  const override = parseBooleanEnv(getEnv('CRAFT_FEATURE_AUTO_UPDATE'));
+  if (override !== undefined) return override;
+  return false;
+}
+
 export const FEATURE_FLAGS = {
   /** Enable Opus 4.7 fast mode (speed:"fast" + beta header). 6x pricing. */
   fastMode: false,
@@ -86,5 +102,14 @@ export const FEATURE_FLAGS = {
    */
   get embeddedServer(): boolean {
     return isEmbeddedServerEnabled();
+  },
+  /**
+   * Enable the in-app auto-update pipeline (feed check, download, install).
+   *
+   * Defaults to disabled — no release channel yet. Override with
+   * CRAFT_FEATURE_AUTO_UPDATE=1|0.
+   */
+  get autoUpdate(): boolean {
+    return isAutoUpdateEnabled();
   },
 } as const;
