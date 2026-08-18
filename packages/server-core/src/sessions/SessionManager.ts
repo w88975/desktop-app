@@ -26,6 +26,7 @@ import { PrivilegedExecutionBroker } from '@craft-agent/server-core/services'
 import { isValidWorkingDirectory } from '../utils/path-validation'
 import { InitGate } from '@craft-agent/server-core/domain'
 import { i18n } from '@craft-agent/shared/i18n'
+import { FEATURE_FLAGS } from '@craft-agent/shared/feature-flags'
 import {
   getWorkspaces,
   getWorkspaceByNameOrId,
@@ -4863,6 +4864,9 @@ export class SessionManager implements ISessionManager {
    * Uploads session data and returns shareable URL
    */
   async shareToViewer(sessionId: string): Promise<import('@craft-agent/shared/protocol').ShareResult> {
+    if (!FEATURE_FLAGS.sessionSharing) {
+      return { success: false, error: 'Session sharing is disabled' }
+    }
     const managed = this.sessions.get(sessionId)
     if (!managed) {
       return { success: false, error: 'Session not found' }
@@ -4924,6 +4928,9 @@ export class SessionManager implements ISessionManager {
    * Re-uploads session data to the same URL
    */
   async updateShare(sessionId: string): Promise<import('@craft-agent/shared/protocol').ShareResult> {
+    if (!FEATURE_FLAGS.sessionSharing) {
+      return { success: false, error: 'Session sharing is disabled' }
+    }
     const managed = this.sessions.get(sessionId)
     if (!managed) {
       return { success: false, error: 'Session not found' }
@@ -4988,15 +4995,22 @@ export class SessionManager implements ISessionManager {
     this.sendEvent({ type: 'async_operation', sessionId, isOngoing: true }, managed.workspace.id)
 
     try {
-      const { VIEWER_URL } = await import('@craft-agent/shared/branding')
-      const response = await fetch(
-        `${VIEWER_URL}/s/api/${managed.sharedId}`,
-        { method: 'DELETE' }
-      )
+      // With sharing disabled we never contact the viewer service — but we still
+      // clear the local share state so a session left over from an enabled build
+      // can be detached.
+      if (FEATURE_FLAGS.sessionSharing) {
+        const { VIEWER_URL } = await import('@craft-agent/shared/branding')
+        const response = await fetch(
+          `${VIEWER_URL}/s/api/${managed.sharedId}`,
+          { method: 'DELETE' }
+        )
 
-      if (!response.ok) {
-        sessionLog.error(`Revoke failed with status ${response.status}`)
-        return { success: false, error: 'Failed to revoke share' }
+        if (!response.ok) {
+          sessionLog.error(`Revoke failed with status ${response.status}`)
+          return { success: false, error: 'Failed to revoke share' }
+        }
+      } else {
+        sessionLog.info('Session sharing disabled — clearing local share state only')
       }
 
       // Clear shared info
@@ -5685,8 +5699,9 @@ export class SessionManager implements ISessionManager {
       await new Promise(resolve => setTimeout(resolve, 100))
     }
 
-    // Revoke share if session was shared (prevent orphaned viewer copies)
-    if (managed.sharedId) {
+    // Revoke share if session was shared (prevent orphaned viewer copies).
+    // Skipped while sharing is disabled — no viewer copies can exist.
+    if (managed.sharedId && FEATURE_FLAGS.sessionSharing) {
       try {
         const { VIEWER_URL } = await import('@craft-agent/shared/branding')
         const response = await fetch(
