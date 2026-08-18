@@ -32,6 +32,7 @@
 | 文档 | 内容 |
 |---|---|
 | [upstream-sync](upstream-sync.md) | 如何拉取、对比、移植上游 craft-agents-oss 的更新 |
+| [upstream/](upstream/README.md) | **每个上游版本的对齐记录** —— 移植了什么、忽略了什么、为什么，以及留下的尾巴 |
 | [cli](cli.md) | CLI 客户端用法 |
 
 ## 阅读路线
