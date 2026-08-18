@@ -9,7 +9,7 @@
 
 import { join } from 'path';
 import { homedir } from 'os';
-import { existsSync, mkdirSync, writeFileSync, readdirSync, readFileSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, readdirSync, readFileSync, unlinkSync } from 'fs';
 import { getBundledAssetsDir } from '../utils/paths.ts';
 import { debug } from '../utils/debug.ts';
 
@@ -86,7 +86,24 @@ export function initializeReleaseNotes(): void {
     writeFileSync(notePath, content, 'utf-8');
   }
 
-  debug(`[release-notes] Synced ${Object.keys(bundledNotes).length} release notes`);
+  // Drop notes the bundle no longer ships. Without this the sync is
+  // append-only, so notes from a previous install linger forever — they keep
+  // showing up in the release notes panel and, because the "unseen" check
+  // compares against the newest file on disk, leave the badge permanently lit.
+  // Only this directory's own .md files are touched; it is app-managed.
+  let stale = 0;
+  try {
+    for (const filename of readdirSync(RELEASE_NOTES_DIR)) {
+      if (!filename.endsWith('.md')) continue;
+      if (filename in bundledNotes) continue;
+      unlinkSync(join(RELEASE_NOTES_DIR, filename));
+      stale++;
+    }
+  } catch (error) {
+    debug(`[release-notes] Could not prune stale notes: ${error}`);
+  }
+
+  debug(`[release-notes] Synced ${Object.keys(bundledNotes).length} release notes, pruned ${stale}`);
 }
 
 /**
@@ -116,12 +133,21 @@ export interface ReleaseNote {
   content: string;
 }
 
+/** Only `X.Y.Z.md` files are released notes; `next.md` is an authoring buffer. */
+const VERSION_FILENAME = /^\d+\.\d+\.\d+\.md$/;
+
 /**
  * Get release notes sorted newest-first, limited to the most recent 10.
+ *
+ * Non-version files are filtered out. Letting `next.md` through makes
+ * `compareSemver` return NaN for every comparison against it, which leaves the
+ * sort order undefined — and `getLatestReleaseVersion()` could then report
+ * "next" as the current version.
  */
 export function getReleaseNotesList(): ReleaseNote[] {
   const notes = getBundledReleaseNotes();
   return Object.entries(notes)
+    .filter(([filename]) => VERSION_FILENAME.test(filename))
     .map(([filename, content]) => ({
       version: parseVersion(filename),
       content,
