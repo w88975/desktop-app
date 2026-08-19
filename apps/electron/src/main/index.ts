@@ -5,6 +5,7 @@ loadShellEnv()
 
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, nativeTheme, net, shell } from 'electron'
 import { APP_PLATFORM_CHANNELS, type AgentShellCommand, type SurfaceKind } from '../shared/app-platform'
+import { AUTH_CHANNELS, type AuthenticatedRequest, type AuthState } from '../shared/auth'
 import { createHash, randomUUID } from 'crypto'
 import { hostname, homedir } from 'os'
 import * as Sentry from '@sentry/electron/main'
@@ -98,6 +99,8 @@ import { initModelRefreshService, getModelRefreshService, setFetcherPlatform } f
 import { setSearchPlatform, setImageProcessor } from '@craft-agent/server-core/services'
 import { createApplicationMenu } from './menu'
 import { WindowManager } from './window-manager'
+import { AuthService } from './auth-service'
+import { AuthWindowController } from './auth-window'
 import { loadWindowState, saveWindowState } from './window-state'
 import { getWorkspaces, getWorkspaceByNameOrId, loadStoredConfig, addWorkspace, saveConfig } from '@craft-agent/shared/config'
 import { getDefaultWorkspacesDir } from '@craft-agent/shared/workspaces'
@@ -217,6 +220,10 @@ let externalAppRegistry: ExternalAppRegistry | null = null
 let oauthFlowStore: OAuthFlowStore | null = null
 let moduleSink: EventSink | null = null
 let moduleClientResolver: ((webContentsId: number) => string | undefined) | null = null
+let authService: AuthService | null = null
+let authWindowController: AuthWindowController | null = null
+let appRuntimeReady = false
+let mainWindowOpenPending = false
 
 // Messaging gateway: the bootstrap handle is created once sessionManager is
 // available (inside createHandlerDeps) and populated with the WS publisher
@@ -224,9 +231,6 @@ let moduleClientResolver: ((webContentsId: number) => string | undefined) | null
 // through createMessagingBootstrap — do not construct MessagingGatewayRegistry
 // directly.
 let messagingHandle: MessagingBootstrapHandle | null = null
-
-// Store pending deep link if app not ready yet (cold start)
-let pendingDeepLink: string | null = null
 
 // Set app name early (before app.whenReady) to ensure correct macOS menu bar title
 // Supports multi-instance dev: CRAFT_APP_NAME env var (e.g., "Craft Agents [1]")
@@ -295,13 +299,15 @@ app.on('open-url', (event, url) => {
   event.preventDefault()
   mainLog.info('Received deeplink:', url)
 
+  if (authService?.getState().status !== 'authenticated') {
+    authWindowController?.focus()
+    return
+  }
+
   if (windowManager) {
     handleDeepLink(url, windowManager, moduleSink ?? undefined, moduleClientResolver ?? undefined).catch(err => {
       mainLog.error('Failed to handle deep link:', err)
     })
-  } else {
-    // App not ready - store for later
-    pendingDeepLink = url
   }
 })
 
@@ -311,6 +317,10 @@ if (!gotTheLock) {
   app.quit()
 } else {
   app.on('second-instance', (_event, commandLine, _workingDirectory) => {
+    if (authService?.getState().status !== 'authenticated') {
+      authWindowController?.focus()
+      return
+    }
     // Someone tried to run a second instance, we should focus our window.
     // On Windows/Linux, the deeplink is in commandLine
     const url = commandLine.find(arg => arg.startsWith(`${DEEPLINK_SCHEME}://`))
@@ -353,35 +363,81 @@ async function createInitialWindows(): Promise<void> {
 
   const validWorkspaceIds = workspaces.map(ws => ws.id)
 
-  if (savedState?.windows.length) {
-    // Restore windows from saved state
-    let restoredCount = 0
+  const preferredWorkspaceId = savedState?.lastFocusedWorkspaceId
+  const workspaceId = preferredWorkspaceId && validWorkspaceIds.includes(preferredWorkspaceId)
+    ? preferredWorkspaceId
+    : workspaces[0].id
+  windowManager.createWindow({ workspaceId })
+  mainLog.info(`Created authenticated window for workspace: ${workspaceId}`)
+}
 
-    for (const saved of savedState.windows) {
-      // Skip invalid workspaces
-      if (!validWorkspaceIds.includes(saved.workspaceId)) continue
+function assertAuthService(): AuthService {
+  if (!authService) throw new Error('Authentication service is unavailable')
+  return authService
+}
 
-      // Restore main window with focused mode if it was saved
-      mainLog.info(`Restoring window: workspaceId=${saved.workspaceId}, focused=${saved.focused ?? false}, url=${saved.url ?? 'none'}`)
-      const win = windowManager.createWindow({
-        workspaceId: saved.workspaceId,
-        focused: saved.focused,
-        restoreUrl: saved.url,
-      })
-      win.setBounds(saved.bounds)
+function isAuthConsumer(senderId: number, allowLoginWindow = false): boolean {
+  if (allowLoginWindow && authWindowController?.isSender(senderId)) return true
+  const surface = windowManager?.getSurfaceRegistration(senderId)
+  return surface?.kind === 'shell' || surface?.kind === 'agent'
+}
 
-      restoredCount++
+function broadcastAuthState(state: AuthState): void {
+  authWindowController?.sendState(state)
+  for (const managed of windowManager?.getAllWindows() ?? []) {
+    if (!managed.window.webContents.isDestroyed()) {
+      managed.window.webContents.send(AUTH_CHANNELS.STATE_CHANGED, state)
     }
-
-    if (restoredCount > 0) {
-      mainLog.info(`Restored ${restoredCount} window(s) from saved state`)
-      return
-    }
+    const agent = windowManager?.getShellViewManager(managed.window.webContents.id)?.getAgentWebContents()
+    if (agent && !agent.isDestroyed()) agent.send(AUTH_CHANNELS.STATE_CHANGED, state)
   }
+}
 
-  // Default: open window for first workspace
-  windowManager.createWindow({ workspaceId: workspaces[0].id })
-  mainLog.info(`Created window for first workspace: ${workspaces[0].name}`)
+function lockToAuthWindow(): void {
+  if (process.env.CRAFT_HEADLESS) return
+  authWindowController?.show()
+  windowManager?.destroyAllWindows()
+}
+
+function requestAuthenticatedMainWindow(): void {
+  if (!appRuntimeReady) {
+    mainWindowOpenPending = true
+    return
+  }
+  if (authService?.getState().status !== 'authenticated' || !windowManager) return
+  if (!windowManager.hasWindows()) void createInitialWindows()
+  authWindowController?.dismiss()
+  mainWindowOpenPending = false
+}
+
+function registerAuthIpc(): void {
+  ipcMain.handle(AUTH_CHANNELS.GET_STATE, event => {
+    if (!isAuthConsumer(event.sender.id, true)) throw new Error('Unauthorized Auth consumer')
+    return assertAuthService().getState()
+  })
+  ipcMain.handle(AUTH_CHANNELS.SEND_CODE, (event, phone: string) => {
+    if (!authWindowController?.isSender(event.sender.id)) throw new Error('Unauthorized Auth consumer')
+    return assertAuthService().sendCode(phone)
+  })
+  ipcMain.handle(AUTH_CHANNELS.LOGIN, async (event, phone: string, code: string) => {
+    if (!authWindowController?.isSender(event.sender.id)) throw new Error('Unauthorized Auth consumer')
+    const state = await assertAuthService().login(phone, code)
+    setTimeout(requestAuthenticatedMainWindow, 0)
+    return state
+  })
+  ipcMain.handle(AUTH_CHANNELS.LOGOUT, async event => {
+    if (!isAuthConsumer(event.sender.id)) throw new Error('Unauthorized Auth consumer')
+    await assertAuthService().logout()
+    setTimeout(lockToAuthWindow, 0)
+  })
+  ipcMain.handle(AUTH_CHANNELS.REQUEST, async (event, input: AuthenticatedRequest) => {
+    if (!isAuthConsumer(event.sender.id)) throw new Error('Unauthorized Auth consumer')
+    try {
+      return await assertAuthService().authenticatedRequest(input)
+    } finally {
+      if (authService?.getState().status === 'unauthenticated') setTimeout(lockToAuthWindow, 0)
+    }
+  })
 }
 
 app.whenReady().then(async () => {
@@ -480,6 +536,22 @@ app.whenReady().then(async () => {
     // Skip server-side initialization (SessionManager, model refresh, platform injection).
     const isClientOnly = !!process.env.CRAFT_SERVER_URL
     const isHeadless = !!process.env.CRAFT_HEADLESS
+
+    if (!isHeadless) {
+      authWindowController = new AuthWindowController()
+      authService = new AuthService(getCredentialManager(), net.fetch as typeof fetch)
+      registerAuthIpc()
+      authService.subscribe(state => {
+        broadcastAuthState(state)
+        if (state.status === 'unauthenticated' && windowManager?.hasWindows()) {
+          setTimeout(lockToAuthWindow, 0)
+        }
+      })
+      authWindowController.show()
+      void authService.initialize().then(state => {
+        if (state.status === 'authenticated') requestAuthenticatedMainWindow()
+      }).catch(() => lockToAuthWindow())
+    }
 
     if (isClientOnly) {
       mainLog.info(`Client-only mode: CRAFT_SERVER_URL=${process.env.CRAFT_SERVER_URL} (server initialization skipped)`)
@@ -1161,7 +1233,12 @@ app.whenReady().then(async () => {
     // Create initial windows (restores from saved state or opens first workspace)
     // In headless mode the server runs without any UI — skip window creation.
     if (!isHeadless) {
-      await createInitialWindows()
+      appRuntimeReady = true
+      if (mainWindowOpenPending || authService?.getState().status === 'authenticated') {
+        requestAuthenticatedMainWindow()
+      } else {
+        lockToAuthWindow()
+      }
     }
 
     // Run credential health check at startup to detect issues early
@@ -1246,13 +1323,6 @@ app.whenReady().then(async () => {
       mainLog.info('[auto-update] Skipping auto-update in dev mode')
     }
 
-    // Process pending deep link from cold start
-    if (pendingDeepLink) {
-      mainLog.info('Processing pending deep link:', pendingDeepLink)
-      await handleDeepLink(pendingDeepLink, windowManager, moduleSink ?? undefined, moduleClientResolver ?? undefined)
-      pendingDeepLink = null
-    }
-
     mainLog.info('App initialized successfully')
     if (isDebugMode) {
       mainLog.info('Debug mode enabled - logs at:', getLogFilePath())
@@ -1265,6 +1335,10 @@ app.whenReady().then(async () => {
 
   // macOS: Re-create window when dock icon is clicked
   app.on('activate', () => {
+    if (authService?.getState().status !== 'authenticated') {
+      authWindowController?.show()
+      return
+    }
     if (BrowserWindow.getAllWindows().length === 0 && windowManager) {
       // Open first workspace or last focused
       const workspaces = getWorkspaces()

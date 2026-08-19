@@ -39,6 +39,8 @@ export interface UserPreferences {
    * Not user-editable; not exposed via the `update_user_preferences` tool.
    */
   uiLanguage?: LanguageCode;
+  /** Last successful Huaxiaozhu Login mobile number. Not secret. */
+  lastAuthPhone?: string;
   // When the preferences were last updated
   updatedAt?: number;
 }
@@ -112,6 +114,17 @@ export function setPersistedUiLanguage(code: LanguageCode): void {
   const current = loadPreferences();
   if (current.uiLanguage === code) return;
   savePreferences({ ...current, uiLanguage: code });
+}
+
+export function getLastAuthPhone(): string | undefined {
+  const phone = loadPreferences().lastAuthPhone;
+  return typeof phone === 'string' && /^1[3-9]\d{9}$/.test(phone) ? phone : undefined;
+}
+
+export function setLastAuthPhone(phone: string): void {
+  const current = loadPreferences();
+  if (current.lastAuthPhone === phone) return;
+  savePreferences({ ...current, lastAuthPhone: phone });
 }
 
 /**

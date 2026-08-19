@@ -6,6 +6,7 @@ import {
   type ShellState,
   type WebviewSurfaceBootstrap,
 } from '../shared/app-platform'
+import { createAuthAPI } from './auth-bridge'
 
 const api: ShellAPI = {
   getState: () => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.GET_STATE),
@@ -27,3 +28,4 @@ const api: ShellAPI = {
 }
 
 contextBridge.exposeInMainWorld('shellAPI', api)
+contextBridge.exposeInMainWorld('authAPI', createAuthAPI())

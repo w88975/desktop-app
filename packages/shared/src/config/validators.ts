@@ -123,6 +123,7 @@ export const UserPreferencesSchema = z.object({
   // Internal: mirrors Appearance → Language. Not user-editable.
   // Validated against the registry-derived supported set.
   uiLanguage: z.enum([...SUPPORTED_LANGUAGE_CODES] as [LanguageCode, ...LanguageCode[]]).optional(),
+  lastAuthPhone: z.string().regex(/^1[3-9]\d{9}$/).optional(),
   updatedAt: z.number().int().min(0).optional(),
 }).passthrough();
 

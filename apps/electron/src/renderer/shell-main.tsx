@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import ReactDOM from 'react-dom/client'
-import { AppWindow, Bot, ChevronLeft, ChevronRight, Home, Keyboard, LoaderCircle, RotateCw, Settings, X } from 'lucide-react'
+import { AppWindow, Bot, ChevronLeft, ChevronRight, Home, Keyboard, LoaderCircle, LogOut, RotateCw, Settings, X } from 'lucide-react'
 import {
   AGENT_PANEL_DEFAULT_RATIO,
   getActiveContentTabId,
@@ -123,6 +123,11 @@ function AppLogoMenu() {
             <button role="menuitem" onClick={() => run(() => { void window.shellAPI.sendAgentCommand('open-shortcuts') })}>
               <Keyboard className="h-3.5 w-3.5" />
               Keyboard Shortcuts
+            </button>
+            <div className="app-logo-menu-separator" />
+            <button role="menuitem" onClick={() => run(() => { void window.authAPI.logout() })}>
+              <LogOut className="h-3.5 w-3.5" />
+              退出登录
             </button>
           </div>
         </>

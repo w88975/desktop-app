@@ -748,6 +748,13 @@ export class WindowManager {
     return Array.from(this.windows.values()).filter(m => !m.window.isDestroyed())
   }
 
+  /** Destroy every managed Shell window without renderer close interception. */
+  destroyAllWindows(): void {
+    for (const managed of this.getAllWindows()) {
+      if (!managed.window.isDestroyed()) managed.window.destroy()
+    }
+  }
+
   /**
    * Focus existing window for workspace or create new one
    */

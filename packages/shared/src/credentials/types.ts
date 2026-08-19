@@ -27,6 +27,7 @@ export type CredentialType =
   | 'llm_service_account' // GCP service account JSON
   // Workspace credentials
   | 'workspace_oauth'    // Workspace MCP OAuth token
+  | 'app_auth'           // Process-wide Huaxiaozhu application session
   // Source credentials (stored at ~/.craft-agent/workspaces/{ws}/sources/{slug}/)
   | 'source_oauth'       // OAuth tokens for MCP/API sources
   | 'source_bearer'      // Bearer tokens
@@ -44,6 +45,7 @@ const VALID_CREDENTIAL_TYPES: readonly CredentialType[] = [
   'llm_iam',
   'llm_service_account',
   'workspace_oauth',
+  'app_auth',
   'source_oauth',
   'source_bearer',
   'source_apikey',
@@ -90,6 +92,8 @@ export interface StoredCredential {
   refreshToken?: string;
   /** OAuth token expiration (Unix timestamp ms) */
   expiresAt?: number;
+  /** OAuth refresh-token expiration (Unix timestamp ms) */
+  refreshTokenExpiresAt?: number;
   /** OAuth client ID (needed for token refresh) */
   clientId?: string;
   /** OAuth client secret (needed for Google token refresh - Google requires both ID and secret) */

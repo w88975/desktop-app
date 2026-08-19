@@ -30,6 +30,11 @@ const OUTPUTS = [
     label: "shell-preload.cjs",
   },
   {
+    entry: "apps/electron/src/preload/auth.ts",
+    outfile: "apps/electron/dist/auth-preload.cjs",
+    label: "auth-preload.cjs",
+  },
+  {
     entry: "apps/electron/src/preload/app-host.ts",
     outfile: "apps/electron/dist/app-host-preload.cjs",
     label: "app-host-preload.cjs",

@@ -2,6 +2,35 @@
 
 Status: living document
 
+## Authentication gate
+
+Process-wide entry boundary that permits Shell windows only after `AuthService`
+has established an authenticated session. It does not yet authorize background
+services or External Apps.
+
+## Auth service
+
+Main-process singleton that owns Huaxiaozhu token credentials, Login/Logout,
+startup and 401 refresh, SMS cooldown, Auth-state broadcasts, and constrained
+authenticated HTTP requests. It never returns raw tokens to renderers.
+
+## Auth state
+
+Non-secret renderer projection of process authentication state. Contains status,
+remembered mobile identity, optional user-visible error, and SMS resend deadline.
+
+## Auth window
+
+Single dedicated `BrowserWindow` shown while authentication is checking or
+missing. It hosts only Login UI through a least-privilege preload. It never
+coexists intentionally with visible Shell windows. Closing it quits App.
+
+## Authenticated request
+
+Main-process HTTP capability that attaches current access token to a relative
+path under the fixed Huaxiaozhu API root. It refreshes and retries once after a
+401 response. Absolute and cross-origin targets are invalid.
+
 ## Shell window
 
 Electron `BrowserWindow` whose renderer owns title bar, layout, overlays, and
