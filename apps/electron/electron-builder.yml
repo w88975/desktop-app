@@ -73,10 +73,16 @@ files:
 extraMetadata:
   main: dist/main.cjs
 
-# Auto-update: electron-updater fetches from this URL for update manifests (.yml files)
-publish:
-  provider: generic
-  url: https://agents.craft.do/electron/latest
+# Auto-update: intentionally NOT configured.
+#
+# `publish` is what generates app-update.yml inside the package and tells
+# electron-updater where to fetch update manifests. Leaving it unset means the
+# packaged app has no feed at all — a second line of defence behind
+# FEATURE_FLAGS.autoUpdate (packages/shared/src/feature-flags.ts).
+#
+# Do NOT restore the upstream value (https://agents.craft.do/electron/latest):
+# it would ship Craft Agents builds to our users. When our own release channel
+# exists, point it here and flip the feature flag.
 
 # Disable ASAR to avoid decompression overhead and click delays
 asar: false

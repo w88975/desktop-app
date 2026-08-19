@@ -13,6 +13,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import type { UpdateInfo } from '../../shared/types'
+import { FEATURE_FLAGS } from '@craft-agent/shared/feature-flags'
 
 interface UseUpdateCheckerResult {
   /** Current update info */
@@ -83,6 +84,15 @@ export function useUpdateChecker(): UseUpdateCheckerResult {
 
   // Load initial state and check if update ready
   useEffect(() => {
+    // Always read the local snapshot — it carries currentVersion, which the
+    // About section renders whether or not updates are enabled. It is a plain
+    // main-process state read, no network involved.
+    window.electronAPI.getUpdateInfo().then(setUpdateInfo)
+
+    // Everything past this point is the update pipeline itself: no release
+    // channel yet, so never notify or subscribe.
+    if (!FEATURE_FLAGS.autoUpdate) return
+
     const checkAndNotify = async (info: UpdateInfo) => {
       if (!info.available || !info.latestVersion) return
       if (info.downloadState !== 'ready') return
@@ -97,11 +107,8 @@ export function useUpdateChecker(): UseUpdateCheckerResult {
       showUpdateToast(info.latestVersion, installUpdate)
     }
 
-    // Get initial update info
-    window.electronAPI.getUpdateInfo().then((info) => {
-      setUpdateInfo(info)
-      checkAndNotify(info)
-    })
+    // Re-read for the notification path
+    window.electronAPI.getUpdateInfo().then(checkAndNotify)
 
     // Subscribe to update availability changes
     const cleanupAvailable = window.electronAPI.onUpdateAvailable((info) => {

@@ -77,6 +77,7 @@ import { getSessionStatus, hasUnreadMeta, hasMessagesMeta } from '@/utils/sessio
 import { getFileManagerName } from '@/lib/platform'
 import { useMessagingConnect, type MessagingPlatform } from '@/components/messaging/MessagingSessionMenuItem'
 import { useSessionMenuActions } from '@/hooks/useSessionMenuActions'
+import { FEATURE_FLAGS } from '@craft-agent/shared/feature-flags'
 
 type View = 'root' | 'status' | 'labels' | 'share' | 'messaging'
 
@@ -434,8 +435,8 @@ function RootPane({
 
   return (
     <div className="flex flex-col">
-      {/* Share / Shared */}
-      {!sharedUrl ? (
+      {/* Share / Shared — hidden while sharing is disabled */}
+      {!FEATURE_FLAGS.sessionSharing ? null : !sharedUrl ? (
         <Row icon={<CloudUpload className="h-4 w-4" />} label={t('sessionMenu.share')} onTap={onShare} />
       ) : (
         <Row

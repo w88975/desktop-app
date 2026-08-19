@@ -2,6 +2,8 @@
 
 aidp-desktop 基于开源项目 [craft-agents-oss](https://github.com/craft-ai-agents/craft-agents-oss)（Apache-2.0）二次开发，起始快照为 **v0.11.4**（上游提交 `50ffa143`，2026-08-06）。
 
+**已对齐到：v0.12.0（部分移植，2026-08-18）** —— 逐版本的对齐结论见 [upstream/](upstream/README.md)。
+
 我们**不与上游合并**，只把它当作只读参考：上游发布新版本时，人工比对 diff，挑需要的改动手工移植。
 
 ## 为什么不能直接 merge / cherry-pick
@@ -64,6 +66,8 @@ git diff upstream-tags/v0.11.4 develop -- apps/electron
 3. 移植后在提交信息里注明上游来源，例如：
    `fix: 移植上游 v0.12.0 的会话超时修复 (upstream 50ffa143..xxxxxxx)`
 4. 更新本文件顶部记录的「已对齐到的上游版本」
+5. 在 [upstream/](upstream/README.md) 下写一份 `vX.Y.Z.md` 对齐记录 —— 移植了什么、忽略了什么、
+   为什么，以及 diff 之外发现的问题。判断理由不写下来，三个月后没人说得清某个改动是漏了还是故意不要的
 
 ## License 注意事项
 

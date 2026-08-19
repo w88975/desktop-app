@@ -31,6 +31,8 @@ import { getSessionTitle } from '@/utils/session'
 // Model resolution: connection.defaultModel (no hardcoded defaults)
 import { resolveEffectiveConnectionSlug, isSessionConnectionUnavailable } from '@config/llm-connections'
 import { useAgentPresentation } from '@/context/AgentPresentationContext'
+import { getDocUrl } from '@craft-agent/shared/docs/doc-links'
+import { FEATURE_FLAGS } from '@craft-agent/shared/feature-flags'
 
 export interface ChatPageProps {
   sessionId: string
@@ -547,8 +549,9 @@ const ChatPage = React.memo(function ChatPage({ sessionId }: ChatPageProps) {
     }
   }, [sessionId])
 
-  // Share button with dropdown menu rendered in PanelHeader actions slot
-  const shareButton = React.useMemo(() => (
+  // Share button with dropdown menu rendered in PanelHeader actions slot.
+  // Hidden while session sharing is disabled — the viewer endpoint is upstream's.
+  const shareButton = React.useMemo(() => !FEATURE_FLAGS.sessionSharing ? undefined : (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <PanelHeaderCenterButton
@@ -585,7 +588,7 @@ const ChatPage = React.memo(function ChatPage({ sessionId }: ChatPageProps) {
               <span className="flex-1">{t('sessionMenu.stopSharing')}</span>
             </StyledDropdownMenuItem>
             <StyledDropdownMenuSeparator />
-            <StyledDropdownMenuItem onClick={() => window.electronAPI.openUrl('https://agents.craft.do/docs/go-further/sharing')}>
+            <StyledDropdownMenuItem onClick={() => window.electronAPI.openUrl(getDocUrl('sharing'))}>
               <Info className="h-3.5 w-3.5" />
               <span className="flex-1">{t('chat.learnMore')}</span>
             </StyledDropdownMenuItem>
@@ -599,7 +602,7 @@ const ChatPage = React.memo(function ChatPage({ sessionId }: ChatPageProps) {
               <span className="flex-1">{t('chat.shareOnline')}</span>
             </StyledDropdownMenuItem>
             <StyledDropdownMenuSeparator />
-            <StyledDropdownMenuItem onClick={() => window.electronAPI.openUrl('https://agents.craft.do/docs/go-further/sharing')}>
+            <StyledDropdownMenuItem onClick={() => window.electronAPI.openUrl(getDocUrl('sharing'))}>
               <Info className="h-3.5 w-3.5" />
               <span className="flex-1">{t('chat.learnMore')}</span>
             </StyledDropdownMenuItem>

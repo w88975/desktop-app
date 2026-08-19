@@ -59,6 +59,37 @@ export function isEmbeddedServerEnabled(): boolean {
   return false;
 }
 
+/**
+ * Runtime-evaluated check for the in-app auto-update pipeline.
+ *
+ * Disabled: this fork has no release channel of its own, and the upstream feed
+ * (agents.craft.do) must never be reached — it would ship Craft Agents builds to
+ * our users. Everything stays wired up behind this flag; flip it (or set
+ * CRAFT_FEATURE_AUTO_UPDATE=1) once our own update server is in place, after
+ * repointing `publish.url` in apps/electron/electron-builder.yml and
+ * VERSIONS_URL in packages/shared/src/version/manifest.ts.
+ */
+export function isAutoUpdateEnabled(): boolean {
+  const override = parseBooleanEnv(getEnv('CRAFT_FEATURE_AUTO_UPDATE'));
+  if (override !== undefined) return override;
+  return false;
+}
+
+/**
+ * Runtime-evaluated check for publishing sessions to the web viewer.
+ *
+ * Disabled: "share online" POSTs the full session transcript to the upstream
+ * viewer service (agents.craft.do/s/api). We have no viewer deployment of our
+ * own, so leaving it on means user conversations leave for a third party.
+ * Re-enable only after VIEWER_URL (packages/shared/src/branding.ts) points at
+ * our own service.
+ */
+export function isSessionSharingEnabled(): boolean {
+  const override = parseBooleanEnv(getEnv('CRAFT_FEATURE_SESSION_SHARING'));
+  if (override !== undefined) return override;
+  return false;
+}
+
 export const FEATURE_FLAGS = {
   /** Enable Opus 4.7 fast mode (speed:"fast" + beta header). 6x pricing. */
   fastMode: false,
@@ -86,5 +117,23 @@ export const FEATURE_FLAGS = {
    */
   get embeddedServer(): boolean {
     return isEmbeddedServerEnabled();
+  },
+  /**
+   * Enable the in-app auto-update pipeline (feed check, download, install).
+   *
+   * Defaults to disabled — no release channel yet. Override with
+   * CRAFT_FEATURE_AUTO_UPDATE=1|0.
+   */
+  get autoUpdate(): boolean {
+    return isAutoUpdateEnabled();
+  },
+  /**
+   * Enable publishing sessions to the web viewer.
+   *
+   * Defaults to disabled — the viewer endpoint is still upstream's. Override
+   * with CRAFT_FEATURE_SESSION_SHARING=1|0.
+   */
+  get sessionSharing(): boolean {
+    return isSessionSharingEnabled();
   },
 } as const;

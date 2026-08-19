@@ -43,6 +43,7 @@ import type { SessionMeta } from '@/atoms/sessions'
 import { getSessionStatus, hasUnreadMeta, hasMessagesMeta } from '@/utils/session'
 import { MessagingSessionMenuItem } from '@/components/messaging/MessagingSessionMenuItem'
 import { useSessionMenuActions } from '@/hooks/useSessionMenuActions'
+import { FEATURE_FLAGS } from '@craft-agent/shared/feature-flags'
 
 export interface SessionMenuProjectOption {
   id: string
@@ -119,8 +120,8 @@ export function SessionMenu({
 
   return (
     <>
-      {/* Share/Shared based on shared state */}
-      {!sharedUrl ? (
+      {/* Share/Shared based on shared state — hidden while sharing is disabled */}
+      {!FEATURE_FLAGS.sessionSharing ? null : !sharedUrl ? (
         <MenuItem onClick={actions.share}>
           <CloudUpload className="h-3.5 w-3.5" />
           <span className="flex-1">{t("sessionMenu.share")}</span>
