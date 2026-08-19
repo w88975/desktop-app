@@ -147,10 +147,10 @@ function ShellResizeSash({ panelWidth }: { panelWidth: number }) {
       style={{
         right,
         width: PANEL_SASH_HIT_WIDTH,
-        // Surfaces now start flush against the title bar, so the sash does too —
-        // otherwise the top of the seam is not draggable.
-        top: 0,
-        bottom: PANEL_EDGE_INSET + PANEL_STACK_VERTICAL_OVERFLOW,
+        // Match App and Agent vertical insets so the visible seam starts and ends
+        // on the same horizontal edges as both surfaces.
+        top: APP_REGION_INSET,
+        bottom: APP_REGION_INSET + PANEL_STACK_VERTICAL_OVERFLOW,
       }}
       onMouseMove={handlers.onMouseMove}
       onMouseLeave={handlers.onMouseLeave}

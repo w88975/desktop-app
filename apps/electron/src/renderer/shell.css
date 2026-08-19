@@ -324,9 +324,9 @@ html[data-resizing="true"] .app-region {
 @keyframes app-status-spin { to { transform: rotate(360deg); } }
 
 .agent-surface {
-  top: 0;
+  top: var(--app-region-inset);
   right: var(--panel-edge-inset);
-  bottom: var(--panel-edge-inset);
+  bottom: var(--app-region-inset);
   width: var(--agent-panel-width);
   height: auto;
   z-index: 10;
