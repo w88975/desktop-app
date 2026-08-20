@@ -86,6 +86,8 @@ export interface AppTab {
 }
 
 export interface ShellState {
+  /** Present on the Shell projection; omitted by the pure tab state manager. */
+  workspaceId?: string
   activeTarget: ActiveTarget
   tabs: AppTab[]
   agentPanelVisible: boolean
@@ -141,6 +143,8 @@ export const APP_PLATFORM_CHANNELS = {
   SETTINGS_SET_SUBPAGE: 'app-platform:settings-set-subpage',
   SETTINGS_RENDERER_READY: 'app-platform:settings-renderer-ready',
   SETTINGS_OPEN_AGENT_CONVERSATION: 'app-platform:settings-open-agent-conversation',
+  THEME_PREFERENCES_CHANGED: 'app-platform:theme-preferences-changed',
+  WORKSPACE_THEME_CHANGED: 'app-platform:workspace-theme-changed',
 } as const
 
 export interface ShellAPI {

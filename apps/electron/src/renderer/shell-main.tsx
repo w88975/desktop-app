@@ -10,6 +10,7 @@ import {
 import { CraftAgentsSymbol } from './components/icons/CraftAgentsSymbol'
 import { SquarePenRounded } from './components/icons/SquarePenRounded'
 import { TopBarButton } from './components/ui/TopBarButton'
+import { ThemeProvider } from './context/ThemeContext'
 import { useResizeGradient } from './hooks/useResizeGradient'
 import {
   PANEL_EDGE_INSET,
@@ -242,18 +243,19 @@ function Shell() {
   }, [fullVisible, panelVisible])
 
   return (
-    <main
-      className="shell-root"
-      data-agent-visible={(panelVisible || fullVisible) || undefined}
-      data-agent-mode={fullVisible ? 'full' : panelVisible ? 'panel' : 'hidden'}
-      style={{
-        '--agent-panel-width': `${state.agentPanelWidthPx}px`,
-        '--panel-edge-inset': `${PANEL_EDGE_INSET}px`,
-        '--app-region-inset': `${APP_REGION_INSET}px`,
-        '--radius-edge': `${RADIUS_EDGE}px`,
-        '--radius-inner': `${RADIUS_INNER}px`,
-      } as React.CSSProperties}
-    >
+    <ThemeProvider activeWorkspaceId={state.workspaceId ?? null}>
+      <main
+        className="shell-root"
+        data-agent-visible={(panelVisible || fullVisible) || undefined}
+        data-agent-mode={fullVisible ? 'full' : panelVisible ? 'panel' : 'hidden'}
+        style={{
+          '--agent-panel-width': `${state.agentPanelWidthPx}px`,
+          '--panel-edge-inset': `${PANEL_EDGE_INSET}px`,
+          '--app-region-inset': `${APP_REGION_INSET}px`,
+          '--radius-edge': `${RADIUS_EDGE}px`,
+          '--radius-inner': `${RADIUS_INNER}px`,
+        } as React.CSSProperties}
+      >
       <header className="titlebar">
         <div className="no-drag"><AppLogoMenu /></div>
         <TopBarButton aria-label="Back"><ChevronLeft className="h-[18px] w-[18px]" strokeWidth={1.5} /></TopBarButton>
@@ -398,7 +400,8 @@ function Shell() {
           <ShellResizeSash panelWidth={state.agentPanelWidthPx} />
         )}
       </section>
-    </main>
+      </main>
+    </ThemeProvider>
   )
 }
 

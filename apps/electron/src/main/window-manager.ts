@@ -9,7 +9,7 @@ import { classifyExternalUrl, formatBlockedUrlError } from '@craft-agent/shared/
 import { RPC_CHANNELS, type WindowCloseRequestSource } from '../shared/types'
 import type { SavedWindow } from './window-state'
 import { SurfaceRegistry } from './surface-registry'
-import type { SurfaceKind } from '../shared/app-platform'
+import { APP_PLATFORM_CHANNELS, type SurfaceKind } from '../shared/app-platform'
 import type { SurfaceRegistration } from '../shared/app-platform'
 import { ShellViewManager } from './shell-view-manager'
 import type { ExternalAppRegistry } from './external-app-registry'
@@ -73,6 +73,22 @@ export class WindowManager {
   private settingsWindowFactory: (() => Promise<BrowserWindow | null>) | null = null
 
   constructor(private readonly externalAppRegistry: ExternalAppRegistry) {}
+
+  broadcastShellThemePreferences(preferences: { mode: string; colorTheme: string; font: string }): void {
+    for (const { window } of this.windows.values()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send(APP_PLATFORM_CHANNELS.THEME_PREFERENCES_CHANGED, preferences)
+      }
+    }
+  }
+
+  broadcastShellWorkspaceTheme(workspaceId: string, themeId: string | null): void {
+    for (const { window, workspaceId: windowWorkspaceId } of this.windows.values()) {
+      if (!window.isDestroyed() && windowWorkspaceId === workspaceId) {
+        window.webContents.send(APP_PLATFORM_CHANNELS.WORKSPACE_THEME_CHANGED, { workspaceId, themeId })
+      }
+    }
+  }
 
   setSettingsWindowFactory(factory: () => Promise<BrowserWindow | null>): void {
     this.settingsWindowFactory = factory

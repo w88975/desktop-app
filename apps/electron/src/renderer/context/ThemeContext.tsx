@@ -177,10 +177,18 @@ export function ThemeProvider({
 
     window.electronAPI?.getWorkspaceColorTheme?.(activeWorkspaceId).then((theme) => {
       setWorkspaceColorThemeState(theme)
+      window.electronAPI?.broadcastWorkspaceThemeChange?.(activeWorkspaceId, theme)
     }).catch(() => {
       setWorkspaceColorThemeState(null)
     })
   }, [activeWorkspaceId])
+
+  // Publish initial/current preferences too. Shell is a separate renderer and
+  // cannot read Agent/Settings localStorage directly in packaged file:// mode.
+  useEffect(() => {
+    if (isExternalUpdate.current) return
+    void window.electronAPI?.broadcastThemePreferences?.({ mode, colorTheme, font })
+  }, [mode, colorTheme, font])
 
   // Load preset theme when effectiveColorTheme changes (SINGLETON - only here, not in useTheme)
   useEffect(() => {

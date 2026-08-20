@@ -6,6 +6,12 @@
  * though adding one is recommended for safety.
  */
 export interface IWindowManager {
+  /** Forward app-level theme preferences to host Shell renderers. */
+  broadcastShellThemePreferences?(preferences: { mode: string; colorTheme: string; font: string }): void
+
+  /** Forward workspace theme changes to host Shell renderers. */
+  broadcastShellWorkspaceTheme?(workspaceId: string, themeId: string | null): void
+
   /** Map a webContentsId to its owning workspace. */
   getWorkspaceForWindow(webContentsId: number): string | null
 

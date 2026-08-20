@@ -306,6 +306,7 @@ export function registerWorkspaceCoreHandlers(server: RpcServer, deps: HandlerDe
   // Broadcast theme preferences to all other windows (for cross-window sync)
   server.handle(RPC_CHANNELS.theme.BROADCAST_PREFERENCES, async (ctx, preferences: { mode: string; colorTheme: string; font: string }) => {
     pushTyped(server, RPC_CHANNELS.theme.PREFERENCES_CHANGED, { to: 'all' }, preferences)
+    deps.windowManager?.broadcastShellThemePreferences?.(preferences)
   })
 
   // Workspace-level theme overrides
@@ -341,6 +342,7 @@ export function registerWorkspaceCoreHandlers(server: RpcServer, deps: HandlerDe
   // Broadcast workspace theme change to all other windows (for cross-window sync)
   server.handle(RPC_CHANNELS.theme.BROADCAST_WORKSPACE_THEME, async (ctx, workspaceId: string, themeId: string | null) => {
     pushTyped(server, RPC_CHANNELS.theme.WORKSPACE_THEME_CHANGED, { to: 'all' }, { workspaceId, themeId })
+    deps.windowManager?.broadcastShellWorkspaceTheme?.(workspaceId, themeId)
   })
 
   // ============================================================

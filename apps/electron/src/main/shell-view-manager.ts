@@ -325,7 +325,10 @@ export class ShellViewManager {
   }
 
   getState(): ShellState {
-    return this.tabManager.getState()
+    return {
+      ...this.tabManager.getState(),
+      workspaceId: this.workspaceId,
+    }
   }
 
   getInstalledApps(): InstalledAppSummary[] {
