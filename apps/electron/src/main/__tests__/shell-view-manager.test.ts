@@ -271,8 +271,9 @@ describe('ShellViewManager webview lifecycle', () => {
   })
 
   it('updates Settings context when the Shell workspace changes', () => {
+    const window = createWindow()
     const manager = new ShellViewManager({
-      window: createWindow() as any,
+      window: window as any,
       workspaceId: 'ws-1',
       initialActiveTarget: 'home',
       externalAppRegistry: createExternalAppRegistry() as any,
@@ -286,6 +287,11 @@ describe('ShellViewManager webview lifecycle', () => {
 
     manager.updateWorkspace('ws-2')
     expect(manager.getSettingsContext()).toEqual({ workspaceId: 'ws-2' })
+    expect(manager.getState().workspaceId).toBe('ws-2')
+    expect(window.webContents.send).toHaveBeenCalledWith(
+      'app-platform:state-changed',
+      expect.objectContaining({ workspaceId: 'ws-2' }),
+    )
     expect(guest.send).toHaveBeenCalledWith(
       'app-platform:settings-context-changed',
       { workspaceId: 'ws-2' },

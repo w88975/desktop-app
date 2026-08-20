@@ -427,6 +427,9 @@ export class ShellViewManager {
     if (this.settingsWebContents && !this.settingsWebContents.isDestroyed()) {
       this.settingsWebContents.send(APP_PLATFORM_CHANNELS.SETTINGS_CONTEXT_CHANGED, { workspaceId })
     }
+    // Shell owns workspace-sensitive chrome such as the active color theme.
+    // Publish the new workspace even when Settings has not been opened.
+    this.emitState()
   }
 
   getSettingsContext(): { workspaceId: string } {
