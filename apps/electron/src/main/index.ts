@@ -342,8 +342,8 @@ if (!gotTheLock) {
 }
 
 // Helper to create initial windows on startup
-async function createInitialWindows(): Promise<void> {
-  if (!windowManager) return
+async function createInitialWindows(): Promise<BrowserWindow | null> {
+  if (!windowManager) return null
 
   // Load saved window state
   const savedState = loadWindowState()
@@ -367,8 +367,9 @@ async function createInitialWindows(): Promise<void> {
   const workspaceId = preferredWorkspaceId && validWorkspaceIds.includes(preferredWorkspaceId)
     ? preferredWorkspaceId
     : workspaces[0].id
-  windowManager.createWindow({ workspaceId })
+  const window = windowManager.createWindow({ workspaceId })
   mainLog.info(`Created authenticated window for workspace: ${workspaceId}`)
+  return window
 }
 
 function assertAuthService(): AuthService {
@@ -527,6 +528,13 @@ app.whenReady().then(async () => {
 
     // Initialize window manager
     windowManager = new WindowManager(externalAppRegistry)
+    windowManager.setSettingsWindowFactory(async () => {
+      if (authService?.getState().status !== 'authenticated') {
+        authWindowController?.show()
+        return null
+      }
+      return createInitialWindows()
+    })
 
     // Create the application menu (needs windowManager for New Window action)
     createApplicationMenu(windowManager)
@@ -608,6 +616,9 @@ app.whenReady().then(async () => {
     ipcMain.handle(APP_PLATFORM_CHANNELS.OPEN_APP, (event, appId: string) =>
       getShellViews(event.sender.id, ['shell', 'home']).openApp(appId)
     )
+    ipcMain.handle(APP_PLATFORM_CHANNELS.OPEN_SETTINGS, (event, subpage?: string) =>
+      getShellViews(event.sender.id, ['shell', 'agent']).openSettings(subpage)
+    )
     ipcMain.handle(APP_PLATFORM_CHANNELS.ACTIVATE_TAB, (event, tabId: string) =>
       getShellViews(event.sender.id, ['shell']).activateTab(tabId)
     )
@@ -674,6 +685,29 @@ app.whenReady().then(async () => {
     })
     ipcMain.handle(APP_PLATFORM_CHANNELS.EXTERNAL_OPEN_AGENT_PANEL, event =>
       getExternalAppManager(event.sender.id).openAgentPanel()
+    )
+
+    const getSettingsManager = (senderId: number) => {
+      const surface = windowManager?.getSurfaceRegistration(senderId)
+      if (!surface || surface.kind !== 'app' || surface.appId !== 'settings') {
+        throw new Error(`Surface ${senderId} cannot use Settings App IPC`)
+      }
+      const manager = windowManager?.getShellViewManager(senderId)
+      if (!manager) throw new Error(`No shell view manager for surface ${senderId}`)
+      return manager
+    }
+
+    ipcMain.handle(APP_PLATFORM_CHANNELS.SETTINGS_GET_CONTEXT, event =>
+      getSettingsManager(event.sender.id).getSettingsContext()
+    )
+    ipcMain.handle(APP_PLATFORM_CHANNELS.SETTINGS_SET_SUBPAGE, (event, subpage: string) =>
+      getSettingsManager(event.sender.id).setSettingsSubpage(subpage)
+    )
+    ipcMain.handle(APP_PLATFORM_CHANNELS.SETTINGS_RENDERER_READY, event =>
+      getSettingsManager(event.sender.id).markSettingsRendererReady(event.sender.id)
+    )
+    ipcMain.handle(APP_PLATFORM_CHANNELS.SETTINGS_OPEN_AGENT_CONVERSATION, (event, sessionId: string) =>
+      getSettingsManager(event.sender.id).focusAgentTab({ type: 'conversation', sessionId })
     )
 
     // Transport diagnostics bridge — preload reports remote WS connection state changes

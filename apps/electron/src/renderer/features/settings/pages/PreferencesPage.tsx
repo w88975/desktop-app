@@ -14,7 +14,6 @@ import { useTranslation } from 'react-i18next'
 import { PanelHeader } from '@/components/app-shell/PanelHeader'
 import { HeaderMenu } from '@/components/ui/HeaderMenu'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { routes } from '@/lib/navigate'
 import { Spinner } from '@craft-agent/ui'
 import {
   SettingsSection,
@@ -23,12 +22,6 @@ import {
   SettingsTextarea,
 } from '@/components/settings'
 import { EditPopover, EditButton, getEditConfig } from '@/components/ui/EditPopover'
-import type { DetailsPageMeta } from '@/lib/navigation-registry'
-
-export const meta: DetailsPageMeta = {
-  navigator: 'settings',
-  slug: 'preferences',
-}
 
 interface PreferencesFormState {
   name: string
@@ -188,7 +181,7 @@ export default function PreferencesPage() {
 
   return (
     <div className="h-full flex flex-col">
-      <PanelHeader title={t("settings.preferences.title")} actions={<HeaderMenu route={routes.view.settings('preferences')} helpFeature="preferences" />} />
+      <PanelHeader title={t("settings.preferences.title")} actions={<HeaderMenu helpFeature="preferences" />} />
       <div className="flex-1 min-h-0 mask-fade-y">
         <ScrollArea className="h-full">
           <div className="px-5 py-7 max-w-3xl mx-auto space-y-8">

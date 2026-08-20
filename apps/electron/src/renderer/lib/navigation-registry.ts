@@ -74,7 +74,7 @@ export interface NavigatorConfig<TDetailsPages extends Record<string, ComponentT
 /**
  * All navigator types in the app
  */
-export type NavigatorType = 'sessions' | 'sources' | 'settings'
+export type NavigatorType = 'sessions' | 'sources'
 
 /**
  * Session filter kinds that map to sidebar routes
@@ -154,22 +154,6 @@ export const NavigationRegistry = {
     getFirstItem: (ctx: NavigationData) => ctx.sources[0]?.slug ?? null,
   },
 
-  settings: {
-    displayName: 'Settings',
-    detailsPages: {
-      app: PlaceholderComponent, // AppSettingsPage
-      ai: PlaceholderComponent, // AiSettingsPage
-      appearance: PlaceholderComponent, // AppearanceSettingsPage
-      input: PlaceholderComponent, // InputSettingsPage
-      workspace: PlaceholderComponent, // WorkspaceSettingsPage
-      permissions: PlaceholderComponent, // PermissionsSettingsPage
-      labels: PlaceholderComponent, // LabelsSettingsPage
-      shortcuts: PlaceholderComponent, // ShortcutsPage
-      preferences: PlaceholderComponent, // PreferencesPage
-    },
-    defaultDetails: 'app', // Always has a default
-    getFirstItem: () => 'app',
-  },
 } as const satisfies Record<NavigatorType, NavigatorConfig<Record<string, ComponentType<DetailsProps>>>>
 
 // =============================================================================
@@ -184,7 +168,7 @@ export type DetailsType<N extends NavigatorType> = keyof (typeof NavigationRegis
 /**
  * All possible details types across all navigators
  */
-export type AnyDetailsType = DetailsType<'sessions'> | DetailsType<'sources'> | DetailsType<'settings'>
+export type AnyDetailsType = DetailsType<'sessions'> | DetailsType<'sources'>
 
 // =============================================================================
 // Navigation State Types
@@ -196,5 +180,3 @@ export type AnyDetailsType = DetailsType<'sessions'> | DetailsType<'sources'> | 
 export type NavigationState =
   | { navigator: 'sessions'; sessionFilter: SessionFilter; details: { type: 'session'; id: string } | null }
   | { navigator: 'sources'; details: { type: 'source'; id: string } | null }
-  | { navigator: 'settings'; details: { type: DetailsType<'settings'>; id: string } }
-

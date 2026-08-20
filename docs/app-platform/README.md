@@ -9,6 +9,8 @@ into a multi-app desktop shell.
 - [`adr/0001-native-multi-renderer-shell.md`](./adr/0001-native-multi-renderer-shell.md): renderer/process boundary
 - [`adr/0003-agent-full-view-as-shell-tab.md`](./adr/0003-agent-full-view-as-shell-tab.md): fixed Agent tab and Panel interaction model
 - [`adr/0004-directory-discovered-external-apps.md`](./adr/0004-directory-discovered-external-apps.md): Builtin/Local/Remote PWA discovery and runtime
+- [`adr/0005-process-wide-auth-gate.md`](./adr/0005-process-wide-auth-gate.md): mandatory process-wide Login and renderer Auth capability boundary
+- [`adr/0006-first-party-settings-app.md`](./adr/0006-first-party-settings-app.md): trusted Settings App extraction, tab lifecycle, and extension model
 - [`agent-tab-refactor-plan.md`](./agent-tab-refactor-plan.md): implementation sequence and acceptance criteria
 - [`external-app-development.md`](./external-app-development.md): 外部 App中文开发指南
 

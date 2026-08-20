@@ -12,10 +12,8 @@
  *   import { routes } from '@/shared/routes'
  *   navigate(routes.action.newSession())
  *   navigate(routes.view.allSessions())
- *   navigate(routes.view.settings('shortcuts'))
  */
 
-import type { SettingsSubpage } from './settings-registry'
 import type { PermissionMode } from '@craft-agent/shared/agent/mode-types'
 
 // Helper to build query strings from params
@@ -177,12 +175,6 @@ export const routes = {
     /** Agentic automations view (automations navigator, agentic filter) */
     automationsAgentic: (automationId?: string) =>
       automationId ? `automations/agentic/automation/${automationId}` as const : 'automations/agentic' as const,
-
-    /** Settings view (settings navigator) - uses SettingsSubpage from registry */
-    settings: (subpage?: SettingsSubpage) =>
-      subpage
-        ? `settings/${subpage}` as const
-        : 'settings' as const,
 
     /** Projects view (projects navigator) */
     projects: (projectSlug?: string) =>

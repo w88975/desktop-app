@@ -13,6 +13,7 @@ import type { SurfaceKind } from '../shared/app-platform'
 import type { SurfaceRegistration } from '../shared/app-platform'
 import { ShellViewManager } from './shell-view-manager'
 import type { ExternalAppRegistry } from './external-app-registry'
+import { isSettingsShortcut } from './settings-shortcut'
 
 // Vite dev server URL for hot reload
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
@@ -69,8 +70,40 @@ export class WindowManager {
   private keyboardCloseIntents: Set<number> = new Set()  // webContents.id flagged by Cmd/Ctrl+W before close
   private keyboardCloseIntentTimeouts: Map<number, NodeJS.Timeout> = new Map()  // Auto-clear stale keyboard-close intents
   private isAppQuitting = false  // Skip layered close interception during app quit
+  private settingsWindowFactory: (() => Promise<BrowserWindow | null>) | null = null
 
   constructor(private readonly externalAppRegistry: ExternalAppRegistry) {}
+
+  setSettingsWindowFactory(factory: () => Promise<BrowserWindow | null>): void {
+    this.settingsWindowFactory = factory
+  }
+
+  private installSettingsShortcut(contents: Electron.WebContents): void {
+    contents.on('before-input-event', (event, input) => {
+      if (!isSettingsShortcut(input)) return
+      event.preventDefault()
+      void this.openSettings(contents.id)
+    })
+  }
+
+  async openSettings(webContentsId?: number, subpage?: string): Promise<boolean> {
+    const sourceWindow = webContentsId == null
+      ? BrowserWindow.getFocusedWindow()
+      : this.getWindowByWebContentsId(webContentsId)
+    let targetWindow: BrowserWindow | null = sourceWindow && this.windows.has(sourceWindow.webContents.id)
+      ? sourceWindow
+      : this.getAllWindows()[0]?.window ?? null
+
+    if (!targetWindow && this.settingsWindowFactory) {
+      targetWindow = await this.settingsWindowFactory()
+    }
+    if (!targetWindow || targetWindow.isDestroyed()) return false
+
+    this.shellViews.get(targetWindow.webContents.id)?.openSettings(subpage)
+    if (targetWindow.isMinimized()) targetWindow.restore()
+    targetWindow.focus()
+    return true
+  }
 
   private resolveShellWebContentsId(webContentsId: number): number {
     return this.surfaces.getShellWebContentsId(webContentsId) ?? webContentsId
@@ -362,6 +395,8 @@ export class WindowManager {
         return
       }
 
+      this.installSettingsShortcut(guestWebContents)
+
       if (!app.isPackaged) {
         guestWebContents.on('context-menu', (_contextEvent, params) => {
           Menu.buildFromTemplate([
@@ -473,6 +508,7 @@ export class WindowManager {
         this.keyboardCloseIntents.delete(wcId)
       }, 500))
     })
+    this.installSettingsShortcut(window.webContents)
 
     // Handle window close request (traffic-light button, menu close, Cmd/Ctrl+W)
     // and send source metadata so renderer can decide layered dismiss vs direct close.
@@ -677,6 +713,7 @@ export class WindowManager {
       const oldWorkspaceId = managed.workspaceId
       managed.workspaceId = workspaceId
       this.surfaces.updateWorkspace(shellWebContentsId, workspaceId)
+      this.shellViews.get(shellWebContentsId)?.updateWorkspace(workspaceId)
       // Re-apply window-title policy so in-window workspace switches update
       // the titlebar immediately (relevant when ≥2 windows are open).
       this.refreshWindowTitles()

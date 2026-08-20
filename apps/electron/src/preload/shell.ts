@@ -13,6 +13,7 @@ const api: ShellAPI = {
   getWebviewBootstrap: () => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.GET_WEBVIEW_BOOTSTRAP) as Promise<WebviewSurfaceBootstrap>,
   activateHome: () => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.ACTIVATE_HOME),
   openApp: (appId) => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.OPEN_APP, appId),
+  openSettings: (subpage) => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.OPEN_SETTINGS, subpage),
   activateTab: (tabId) => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.ACTIVATE_TAB, tabId),
   closeTab: (tabId) => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.CLOSE_TAB, tabId),
   focusAgentTab: (intent) => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.FOCUS_AGENT_TAB, intent),

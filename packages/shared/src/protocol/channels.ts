@@ -149,7 +149,6 @@ export const RPC_CHANNELS = {
   menu: {
     NEW_CHAT: 'menu:newChat',
     NEW_WINDOW: 'menu:newWindow',
-    OPEN_SETTINGS: 'menu:openSettings',
     KEYBOARD_SHORTCUTS: 'menu:keyboardShortcuts',
     TOGGLE_FOCUS_MODE: 'menu:toggleFocusMode',
     TOGGLE_SIDEBAR: 'menu:toggleSidebar',

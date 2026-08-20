@@ -66,7 +66,6 @@ export interface BroadcastEventMap {
 
   // Menu events (per-window, no payload)
   [RPC_CHANNELS.menu.NEW_CHAT]: []
-  [RPC_CHANNELS.menu.OPEN_SETTINGS]: []
   [RPC_CHANNELS.menu.KEYBOARD_SHORTCUTS]: []
   [RPC_CHANNELS.menu.TOGGLE_FOCUS_MODE]: []
   [RPC_CHANNELS.menu.TOGGLE_SIDEBAR]: []

@@ -33,7 +33,7 @@ import { motion } from 'motion/react'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useCompensateForStoplight } from '@/context/StoplightContext'
-import { useAppShellContext } from '@/context/AppShellContext'
+import { useOptionalAppShellContext } from '@/context/AppShellContext'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -119,7 +119,9 @@ export function PanelHeader({
   // PanelSlot in compact mode) propagate to every page's PanelHeader without each
   // page having to forward the prop manually. ChatPage explicitly passes its own
   // value, which overrides the context.
-  const { leadingAction: contextLeadingAction, isCompactMode } = useAppShellContext()
+  const appShellContext = useOptionalAppShellContext()
+  const contextLeadingAction = appShellContext?.leadingAction
+  const isCompactMode = appShellContext?.isCompactMode ?? false
   const leadingAction = explicitLeadingAction ?? contextLeadingAction
 
   // Use context as fallback when prop is not explicitly set.

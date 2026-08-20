@@ -1148,15 +1148,11 @@ export default function App() {
     const unsubNewChat = window.electronAPI.onMenuNewChat(() => {
       setMenuNewChatTrigger(n => n + 1)
     })
-    const unsubSettings = window.electronAPI.onMenuOpenSettings(() => {
-      handleOpenSettings()
-    })
     const unsubShortcuts = window.electronAPI.onMenuKeyboardShortcuts(() => {
-      navigate(routes.view.settings('shortcuts'))
+      void window.electronAPI.openSettings('shortcuts')
     })
     return () => {
       unsubNewChat()
-      unsubSettings()
       unsubShortcuts()
     }
   }, [])
@@ -1725,16 +1721,8 @@ export default function App() {
   const handleOpenFile = linkInterceptor.handleOpenFile
   const handleOpenUrl = linkInterceptor.handleOpenUrl
 
-  const handleOpenSettings = useCallback(() => {
-    navigate(routes.view.settings())
-  }, [])
-
   const handleOpenKeyboardShortcuts = useCallback(() => {
-    navigate(routes.view.settings('shortcuts'))
-  }, [])
-
-  const handleOpenStoredUserPreferences = useCallback(() => {
-    navigate(routes.view.settings('preferences'))
+    void window.electronAPI.openSettings('shortcuts')
   }, [])
 
   // Show reset confirmation dialog
@@ -1879,9 +1867,7 @@ export default function App() {
     onSelectWorkspace: handleSelectWorkspace,
     onRefreshWorkspaces: handleRefreshWorkspaces,
     // App actions
-    onOpenSettings: handleOpenSettings,
     onOpenKeyboardShortcuts: handleOpenKeyboardShortcuts,
-    onOpenStoredUserPreferences: handleOpenStoredUserPreferences,
     onReset: handleReset,
     // Session options
     onSessionOptionsChange: handleSessionOptionsChange,
@@ -1921,9 +1907,7 @@ export default function App() {
     handleOpenUrl,
     handleSelectWorkspace,
     handleRefreshWorkspaces,
-    handleOpenSettings,
     handleOpenKeyboardShortcuts,
-    handleOpenStoredUserPreferences,
     handleReset,
     handleSessionOptionsChange,
     handleInputChange,

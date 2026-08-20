@@ -18,16 +18,14 @@ import { motion, AnimatePresence } from 'motion/react'
 import { PanelHeader } from '@/components/app-shell/PanelHeader'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { HeaderMenu } from '@/components/ui/HeaderMenu'
-import { useAppShellContext } from '@/context/AppShellContext'
+import { useSettingsRuntime } from '../SettingsRuntimeContext'
 import { cn } from '@/lib/utils'
-import { routes } from '@/lib/navigate'
 import { Spinner } from '@craft-agent/ui'
 import { RenameDialog } from '@/components/ui/rename-dialog'
-import type { PermissionMode, WorkspaceSettings, LoadedSource } from '../../../shared/types'
+import type { PermissionMode, WorkspaceSettings, LoadedSource } from '../../../../shared/types'
 import { useDirectoryPicker } from '@/hooks/useDirectoryPicker'
 import { ServerDirectoryBrowser } from '@/components/ServerDirectoryBrowser'
 import { PERMISSION_MODE_CONFIG } from '@craft-agent/shared/agent/mode-types'
-import type { DetailsPageMeta } from '@/lib/navigation-registry'
 import { SourceAvatar } from '@/components/ui/source-avatar'
 import { toast } from 'sonner'
 
@@ -39,11 +37,6 @@ import {
   SettingsMenuSelectRow,
 } from '@/components/settings'
 
-export const meta: DetailsPageMeta = {
-  navigator: 'settings',
-  slug: 'workspace',
-}
-
 // ============================================
 // Main Component
 // ============================================
@@ -52,9 +45,7 @@ export default function WorkspaceSettingsPage() {
   const { t } = useTranslation()
 
   // Get active workspace from context
-  const appShellContext = useAppShellContext()
-  const activeWorkspaceId = appShellContext.activeWorkspaceId
-  const onRefreshWorkspaces = appShellContext.onRefreshWorkspaces
+  const { workspaceId: activeWorkspaceId, refreshWorkspaces: onRefreshWorkspaces } = useSettingsRuntime()
 
   // Workspace settings state
   const [wsName, setWsName] = useState('')
@@ -328,7 +319,7 @@ export default function WorkspaceSettingsPage() {
   if (!activeWorkspaceId) {
     return (
       <div className="h-full flex flex-col">
-        <PanelHeader title={t("settings.workspace.workspaceSettings")} actions={<HeaderMenu route={routes.view.settings('workspace')} helpFeature="workspaces" />} />
+        <PanelHeader title={t("settings.workspace.workspaceSettings")} actions={<HeaderMenu helpFeature="workspaces" />} />
         <div className="flex-1 flex items-center justify-center">
           <p className="text-sm text-muted-foreground">{t("settings.workspace.noWorkspaceSelected")}</p>
         </div>
@@ -340,7 +331,7 @@ export default function WorkspaceSettingsPage() {
   if (isLoadingWorkspace) {
     return (
       <div className="h-full flex flex-col">
-        <PanelHeader title={t("settings.workspace.workspaceSettings")} actions={<HeaderMenu route={routes.view.settings('workspace')} helpFeature="workspaces" />} />
+        <PanelHeader title={t("settings.workspace.workspaceSettings")} actions={<HeaderMenu helpFeature="workspaces" />} />
         <div className="flex-1 flex items-center justify-center">
           <Spinner className="text-muted-foreground" />
         </div>
@@ -350,7 +341,7 @@ export default function WorkspaceSettingsPage() {
 
   return (
     <div className="h-full flex flex-col">
-      <PanelHeader title={t("settings.workspace.workspaceSettings")} actions={<HeaderMenu route={routes.view.settings('workspace')} helpFeature="workspaces" />} />
+      <PanelHeader title={t("settings.workspace.workspaceSettings")} actions={<HeaderMenu helpFeature="workspaces" />} />
       <div className="flex-1 min-h-0 mask-fade-y">
         <ScrollArea className="h-full">
           <div className="px-5 py-7 max-w-3xl mx-auto">

@@ -1,4 +1,3 @@
-import { navigate, routes } from '@/lib/navigate'
 import { dispatchFocusInputEvent } from '@/components/app-shell/input/focus-input-events'
 import type { Message } from '../../../shared/types'
 
@@ -24,7 +23,7 @@ export function handleErrorMessageAction(
   {
     sessionId,
     onOpenUrl,
-    onOpenSettings = () => navigate(routes.view.settings()),
+    onOpenSettings = () => { void window.electronAPI.openSettings() },
     onRetryFocus = dispatchFocusInputEvent,
     onRetry,
   }: HandleErrorMessageActionOptions = {},

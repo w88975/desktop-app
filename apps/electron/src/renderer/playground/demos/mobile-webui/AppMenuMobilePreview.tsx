@@ -30,10 +30,7 @@ export function AppMenuMobilePreview({
             <AppMenu
               onNewChat={log('onNewChat')}
               onNewWindow={log('onNewWindow')}
-              onOpenSettings={log('onOpenSettings')}
-              onOpenSettingsSubpage={(id) => console.log('[Mobile AppMenu] onOpenSettingsSubpage', id)}
               onOpenKeyboardShortcuts={log('onOpenKeyboardShortcuts')}
-              onOpenStoredUserPreferences={log('onOpenStoredUserPreferences')}
               onToggleSidebar={log('onToggleSidebar')}
               onToggleFocusMode={log('onToggleFocusMode')}
             />
@@ -41,7 +38,7 @@ export function AppMenuMobilePreview({
           <div className="flex-1 flex items-start justify-center pt-12">
             <p className="text-xs text-muted-foreground/70 px-6 text-center">
               Tap the Craft logo (top-left) to open the menu.<br />
-              Settings &amp; Help open as full-screen sub-pages in compact mode.
+              Help opens as a full-screen sub-page in compact mode.
             </p>
           </div>
         </div>

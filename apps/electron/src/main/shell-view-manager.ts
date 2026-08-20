@@ -21,6 +21,8 @@ import {
 import { ShellTabManager, type ShellTabEffect } from './shell-tab-manager'
 import type { ExternalAppRegistry } from './external-app-registry'
 import { registerExternalAppProtocolForSession } from './external-app-protocol'
+import { createSettingsDefinition, getInternalInstalledApps, SETTINGS_APP_ID } from './internal-app-registry'
+import { isValidSettingsSubpage, type SettingsSubpage } from '../shared/settings-registry'
 
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
 
@@ -44,12 +46,13 @@ interface GuestDescriptor {
   tabId?: string
   appId?: string
   external?: boolean
+  internal?: boolean
   preload: string
 }
 
 export class ShellViewManager {
   private readonly window: BrowserWindow
-  private readonly workspaceId: string
+  private workspaceId: string
   private readonly registerSurface: ShellViewManagerOptions['registerSurface']
   private readonly unregisterSurface: ShellViewManagerOptions['unregisterSurface']
   private readonly externalAppRegistry: ExternalAppRegistry
@@ -63,6 +66,8 @@ export class ShellViewManager {
   private agentWebContents: WebContents | null = null
   private agentRendererReady = false
   private homeWebContents: WebContents | null = null
+  private settingsWebContents: WebContents | null = null
+  private lastSettingsSubpage: SettingsSubpage = 'app'
   private nextPendingWebContentsId = -1
   private destroyed = false
 
@@ -86,6 +91,7 @@ export class ShellViewManager {
   getWebviewBootstrap(): WebviewSurfaceBootstrap {
     const bootstrapPreload = pathToFileURL(join(__dirname, 'bootstrap-preload.cjs')).toString()
     const appHostPreload = pathToFileURL(join(__dirname, 'app-host-preload.cjs')).toString()
+    const settingsPreload = pathToFileURL(join(__dirname, 'settings-preload.cjs')).toString()
     const externalAppPreload = pathToFileURL(join(__dirname, 'external-app-preload.cjs')).toString()
 
     if (VITE_DEV_SERVER_URL) {
@@ -97,6 +103,8 @@ export class ShellViewManager {
         agentPreload: bootstrapPreload,
         appHostSrc: new URL('/app-host.html', VITE_DEV_SERVER_URL).toString(),
         appHostPreload,
+        settingsSrc: new URL('/settings.html', VITE_DEV_SERVER_URL).toString(),
+        settingsPreload,
         externalAppPreload,
       }
     }
@@ -109,6 +117,8 @@ export class ShellViewManager {
       agentPreload: bootstrapPreload,
       appHostSrc: pathToFileURL(join(__dirname, 'renderer/app-host.html')).toString(),
       appHostPreload,
+      settingsSrc: pathToFileURL(join(__dirname, 'renderer/settings.html')).toString(),
+      settingsPreload,
       externalAppPreload,
     }
   }
@@ -119,6 +129,20 @@ export class ShellViewManager {
       const bootstrap = this.getWebviewBootstrap()
       const agentEntry = new URL(bootstrap.agentSrc)
       const appEntry = new URL(bootstrap.appHostSrc)
+      const settingsEntry = new URL(bootstrap.settingsSrc)
+
+      if (parsed.origin === settingsEntry.origin && parsed.pathname === settingsEntry.pathname) {
+        const tabId = parsed.searchParams.get('tabId') ?? undefined
+        const tab = tabId ? this.managedTabs.get(tabId) : undefined
+        if (!tab || tab.definition.kind !== 'internal' || tab.definition.id !== SETTINGS_APP_ID) return null
+        return {
+          kind: 'app',
+          tabId,
+          appId: SETTINGS_APP_ID,
+          internal: true,
+          preload: bootstrap.settingsPreload,
+        }
+      }
 
       if (parsed.origin !== agentEntry.origin || parsed.pathname !== agentEntry.pathname) {
         if (parsed.origin !== appEntry.origin || parsed.pathname !== appEntry.pathname) {
@@ -209,6 +233,9 @@ export class ShellViewManager {
       if (!tab || (tab.webContents && !tab.webContents.isDestroyed())) return false
       tab.webContents = contents
       this.tabManager.updateTabWebContentsId(tab.tab.id, contents.id)
+      if (descriptor.internal && descriptor.appId === SETTINGS_APP_ID) {
+        this.settingsWebContents = contents
+      }
     }
 
     this.guestWebContents.set(contents.id, contents)
@@ -220,6 +247,9 @@ export class ShellViewManager {
       windowLog.info(
         `App-platform surface ready: kind=${descriptor.kind}, wc=${contents.id}, rendererPid=${contents.getOSProcessId()}`
       )
+      if (descriptor.internal && descriptor.appId === SETTINGS_APP_ID && !contents.isDestroyed()) {
+        contents.send(APP_PLATFORM_CHANNELS.SETTINGS_NAVIGATE, this.lastSettingsSubpage)
+      }
     })
 
     if (descriptor.kind === 'agent') {
@@ -284,6 +314,7 @@ export class ShellViewManager {
       tab.webContents = null
       this.tabManager.updateTabWebContentsId(tab.tab.id, this.nextPendingWebContentsId--)
     }
+    if (this.settingsWebContents?.id === webContentsId) this.settingsWebContents = null
   }
 
   private handleResize = (): void => {
@@ -298,7 +329,7 @@ export class ShellViewManager {
   }
 
   getInstalledApps(): InstalledAppSummary[] {
-    return this.externalAppRegistry.list().map(record => ({
+    const externalApps = this.externalAppRegistry.list().map(record => ({
       appId: record.appId,
       kind: record.sourceType === 'builtin' ? 'built-in' as const : 'external' as const,
       sourceType: record.sourceType,
@@ -310,6 +341,7 @@ export class ShellViewManager {
       error: record.error,
       webTools: record.webTools,
     })).sort((left, right) => left.title.localeCompare(right.title, 'zh-CN'))
+    return [...getInternalInstalledApps(), ...externalApps]
   }
 
   getAgentWebContentsId(): number | undefined {
@@ -327,10 +359,12 @@ export class ShellViewManager {
 
   openApp(appId: string): void {
     const externalRecord = this.externalAppRegistry.get(appId)
-    const definition = externalRecord ? this.definitionFromExternal(externalRecord) : null
+    const tabId = randomUUID()
+    const definition = appId === SETTINGS_APP_ID
+      ? createSettingsDefinition(this.buildSettingsEntry(this.lastSettingsSubpage, tabId))
+      : externalRecord ? this.definitionFromExternal(externalRecord) : null
     if (!definition) throw new Error(`Unknown app: ${appId}`)
 
-    const tabId = randomUUID()
     const transaction = this.tabManager.openAppTab({
       definition,
       tabId,
@@ -348,6 +382,59 @@ export class ShellViewManager {
     if (externalRecord?.status === 'discovered') {
       void this.externalAppRegistry.resolveRemote(appId)
     }
+  }
+
+  openSettings(subpage?: string): void {
+    const target = subpage === undefined
+      ? this.lastSettingsSubpage
+      : isValidSettingsSubpage(subpage) ? subpage : 'app'
+    this.lastSettingsSubpage = target
+    this.openApp(SETTINGS_APP_ID)
+    const managed = [...this.managedTabs.values()].find(item => item.definition.id === SETTINGS_APP_ID)
+    if (managed && (!managed.webContents || managed.webContents.isDestroyed())) {
+      const definition = createSettingsDefinition(this.buildSettingsEntry(target, managed.tab.id))
+      managed.definition = definition
+      this.tabManager.updateAppTab(managed.tab.id, definition)
+      this.emitAllState()
+    } else if (this.settingsWebContents && !this.settingsWebContents.isDestroyed()) {
+      this.settingsWebContents.send(APP_PLATFORM_CHANNELS.SETTINGS_NAVIGATE, target)
+    }
+  }
+
+  setSettingsSubpage(subpage: string): void {
+    if (!isValidSettingsSubpage(subpage)) throw new Error(`Unknown Settings subpage: ${subpage}`)
+    this.lastSettingsSubpage = subpage
+  }
+
+  markSettingsRendererReady(webContentsId: number): void {
+    if (!this.settingsWebContents || this.settingsWebContents.id !== webContentsId || this.settingsWebContents.isDestroyed()) {
+      throw new Error(`Unknown Settings renderer: ${webContentsId}`)
+    }
+    const managed = [...this.managedTabs.values()].find(item => item.definition.id === SETTINGS_APP_ID)
+    if (!managed) throw new Error('Settings tab is unavailable')
+    const definition = createSettingsDefinition(managed.definition.entry, 'ready')
+    managed.definition = definition
+    this.tabManager.updateAppTab(managed.tab.id, definition)
+    this.emitState()
+  }
+
+  updateWorkspace(workspaceId: string): void {
+    if (!workspaceId || workspaceId === this.workspaceId) return
+    this.workspaceId = workspaceId
+    if (this.settingsWebContents && !this.settingsWebContents.isDestroyed()) {
+      this.settingsWebContents.send(APP_PLATFORM_CHANNELS.SETTINGS_CONTEXT_CHANGED, { workspaceId })
+    }
+  }
+
+  getSettingsContext(): { workspaceId: string } {
+    return { workspaceId: this.workspaceId }
+  }
+
+  private buildSettingsEntry(subpage: SettingsSubpage, tabId: string): string {
+    const url = new URL(this.getWebviewBootstrap().settingsSrc)
+    url.searchParams.set('tabId', tabId)
+    url.hash = subpage
+    return url.toString()
   }
 
   activateTab(tabId: string): void {
@@ -514,5 +601,6 @@ export class ShellViewManager {
     this.agentWebContents = null
     this.agentRendererReady = false
     this.homeWebContents = null
+    this.settingsWebContents = null
   }
 }

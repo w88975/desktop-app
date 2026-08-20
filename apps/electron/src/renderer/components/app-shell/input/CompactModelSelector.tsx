@@ -220,7 +220,7 @@ export function CompactModelSelector({
                 type="button"
                 onClick={() => {
                   setOpen(false)
-                  navigate(routes.view.settings('ai'))
+                  void window.electronAPI.openSettings('ai')
                 }}
                 className="text-xs underline text-foreground/70 hover:text-foreground"
               >

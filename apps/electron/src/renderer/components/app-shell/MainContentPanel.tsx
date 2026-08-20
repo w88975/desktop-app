@@ -28,7 +28,6 @@ import {
   useNavigationState,
   isSessionsNavigation,
   isSourcesNavigation,
-  isSettingsNavigation,
   isSkillsNavigation,
   isAutomationsNavigation,
   isProjectsNavigation,
@@ -39,7 +38,6 @@ import { extractLabelId } from '@craft-agent/shared/labels'
 import type { SessionStatusId } from '@/config/session-status-config'
 import { SourceInfoPage, ChatPage } from '@/pages'
 import SkillInfoPage from '@/pages/SkillInfoPage'
-import { getSettingsPageComponent } from '@/pages/settings/settings-pages'
 import { AutomationInfoPage } from '../automations/AutomationInfoPage'
 import ProjectInfoPage from '@/pages/ProjectInfoPage'
 import { KanbanBoardContainer } from './kanban/KanbanBoardContainer'
@@ -355,20 +353,6 @@ export function MainContentPanel({
       />
     </StoplightProvider>
   )
-
-  // Settings navigator - uses component map from settings-pages.ts.
-  // Bare `settings` route (subpage === null) means navigator-only view in compact mode;
-  // PanelStackContainer hides the content panel entirely. On desktop the panel still
-  // mounts, so fall back to the App page so it isn't empty.
-  if (isSettingsNavigation(navState)) {
-    const subpage = navState.subpage ?? 'app'
-    const SettingsPageComponent = getSettingsPageComponent(subpage)
-    return wrapWithStoplight(
-      <Panel variant="grow" className={className}>
-        <SettingsPageComponent />
-      </Panel>
-    )
-  }
 
   // Sources navigator - show source info, multi-select panel, or empty state
   if (isSourcesNavigation(navState)) {

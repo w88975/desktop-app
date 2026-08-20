@@ -69,7 +69,7 @@ describe('normalizePanelRouteForReconcile', () => {
       return state
     }
 
-    expect(normalizePanelRouteForReconcile('settings', resolver)).toBe('settings')
+    expect(normalizePanelRouteForReconcile('skills', resolver)).toBe('skills')
     expect(normalizePanelRouteForReconcile('sources', resolver)).toBe('sources')
   })
 

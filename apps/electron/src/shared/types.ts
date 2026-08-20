@@ -328,6 +328,7 @@ export interface ElectronAPI {
   unfocusAgentTab(): Promise<void>
   dockAgentAsPanel(): Promise<void>
   toggleAgentPanel(): Promise<void>
+  openSettings(subpage?: SettingsSubpage): Promise<void>
   onAgentShellCommand(callback: (command: AgentShellCommand) => void): () => void
   onAgentNavigationIntent(callback: (intent: AgentNavigationIntent) => void): () => void
   notifyAgentRendererReady(): Promise<void>
@@ -407,7 +408,6 @@ export interface ElectronAPI {
 
   // Menu event listeners
   onMenuNewChat(callback: () => void): () => void
-  onMenuOpenSettings(callback: () => void): () => void
   onMenuKeyboardShortcuts(callback: () => void): () => void
   onMenuToggleFocusMode(callback: () => void): () => void
   onMenuToggleSidebar(callback: () => void): () => void
@@ -830,7 +830,7 @@ export type SessionFilter =
  * Settings subpage options - re-exported from settings-registry (single source of truth)
  */
 export type { SettingsSubpage } from './settings-registry'
-import { isValidSettingsSubpage, type SettingsSubpage } from './settings-registry'
+import type { SettingsSubpage } from './settings-registry'
 
 /**
  * Sessions navigation state
@@ -875,19 +875,6 @@ export interface SourcesNavigationState {
 }
 
 /**
- * Settings navigation state
- *
- * `subpage: null` means the bare `settings` route — navigator-only view in compact
- * mode. On desktop, the content panel falls back to the App page so it isn't empty.
- * Sources/Skills/Automations use `details: null` for the same purpose.
- */
-export interface SettingsNavigationState {
-  navigator: 'settings'
-  subpage: SettingsSubpage | null
-  rightSidebar?: RightSidebarPanel
-}
-
-/**
  * Skills navigation state
  */
 export interface SkillsNavigationState {
@@ -921,7 +908,6 @@ export interface ProjectsNavigationState {
 export type NavigationState =
   | SessionsNavigationState
   | SourcesNavigationState
-  | SettingsNavigationState
   | SkillsNavigationState
   | AutomationsNavigationState
   | ProjectsNavigationState
@@ -933,10 +919,6 @@ export const isSessionsNavigation = (
 export const isSourcesNavigation = (
   state: NavigationState
 ): state is SourcesNavigationState => state.navigator === 'sources'
-
-export const isSettingsNavigation = (
-  state: NavigationState
-): state is SettingsNavigationState => state.navigator === 'settings'
 
 export const isSkillsNavigation = (
   state: NavigationState
@@ -980,10 +962,6 @@ export const getNavigationStateKey = (state: NavigationState): string => {
       return `projects/project/${state.details.projectSlug}`
     }
     return 'projects'
-  }
-  if (state.navigator === 'settings') {
-    if (state.subpage === null) return 'settings'
-    return `settings:${state.subpage}`
   }
   // Chats
   const f = state.filter
@@ -1037,15 +1015,6 @@ export const parseNavigationStateKey = (key: string): NavigationState | null => 
       return { navigator: 'projects', details: { type: 'project', projectSlug } }
     }
     return { navigator: 'projects', details: null }
-  }
-
-  // Handle settings
-  if (key === 'settings') return { navigator: 'settings', subpage: null }
-  if (key.startsWith('settings:')) {
-    const subpage = key.slice(9)
-    if (isValidSettingsSubpage(subpage)) {
-      return { navigator: 'settings', subpage }
-    }
   }
 
   // Handle sessions

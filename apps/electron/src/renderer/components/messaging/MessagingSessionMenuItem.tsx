@@ -23,7 +23,6 @@ import { useSetAtom } from 'jotai'
 import { MessageSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import type { TFunction } from 'i18next'
-import { navigate, routes } from '@/lib/navigate'
 import { useMenuComponents } from '@/components/ui/menu-context'
 import { messagingDialogAtom } from '@/atoms/messaging'
 
@@ -74,7 +73,7 @@ export function useMessagingConnect({
         } else {
           // Telegram + Lark share the "open Settings" path — both use
           // a Settings dialog rather than an inline connect flow.
-          navigate(routes.view.settings('messaging'))
+          void window.electronAPI.openSettings('messaging')
           toast.info(t('toast.telegramNotConfiguredOpenSettings'))
         }
         return

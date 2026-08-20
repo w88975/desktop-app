@@ -19,13 +19,13 @@ describe('panel stack single-lane behavior', () => {
 
     store.set(pushPanelAtom, { route: 'allSessions/session/s1' })
     store.set(pushPanelAtom, { route: 'sources/source/github' })
-    store.set(pushPanelAtom, { route: 'settings' })
+    store.set(pushPanelAtom, { route: 'skills' })
 
     const stack = getStack(store)
     expect(stack).toHaveLength(3)
     expect(stack[0].route).toBe('allSessions/session/s1')
     expect(stack[1].route).toBe('sources/source/github')
-    expect(stack[2].route).toBe('settings')
+    expect(stack[2].route).toBe('skills')
     expect(stack.every((p) => p.laneId === 'main')).toBe(true)
   })
 

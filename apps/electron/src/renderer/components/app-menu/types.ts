@@ -1,5 +1,3 @@
-import type { SettingsMenuItem } from '../../../shared/menu-schema'
-
 /**
  * Props shared by `AppMenu` (router) and the desktop/mobile shapes underneath.
  *
@@ -9,11 +7,7 @@ import type { SettingsMenuItem } from '../../../shared/menu-schema'
 export interface AppMenuProps {
   onNewChat: () => void
   onNewWindow?: () => void
-  onOpenSettings: () => void
-  /** Navigate to a specific settings subpage */
-  onOpenSettingsSubpage: (subpage: SettingsMenuItem['id']) => void
   onOpenKeyboardShortcuts: () => void
-  onOpenStoredUserPreferences: () => void
   onToggleSidebar?: () => void
   onToggleFocusMode?: () => void
 }

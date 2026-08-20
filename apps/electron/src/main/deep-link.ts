@@ -10,7 +10,6 @@
  *   craftagents://flagged[/session/{sessionId}]             - Session list (flagged filter)
  *   craftagents://state/{stateId}[/session/{sessionId}]     - Session list (state filter)
  *   craftagents://sources[/source/{sourceSlug}]          - Sources list
- *   craftagents://settings[/{subpage}]                   - Settings (general, shortcuts, preferences)
  *
  * Action format:
  *   craftagents://action/{actionName}[/{id}][?params]
@@ -27,7 +26,6 @@
  * Examples:
  *   craftagents://allSessions                               (all sessions view)
  *   craftagents://allSessions/session/abc123                (specific session)
- *   craftagents://settings/shortcuts                     (shortcuts page)
  *   craftagents://sources/source/github                  (github source info)
  *   craftagents://action/new-chat                        (uses active window)
  *   craftagents://action/resume-sdk-session/{sdkId}      (resume Claude Code session)
@@ -43,7 +41,7 @@ import type { EventSink } from '@craft-agent/server-core/transport'
 export interface DeepLinkTarget {
   /** Workspace ID - undefined means use active window */
   workspaceId?: string
-  /** Compound route format (e.g., 'allSessions/session/abc123', 'settings/shortcuts') */
+  /** Compound route format (e.g., 'allSessions/session/abc123') */
   view?: string
   /** Action route (e.g., 'new-chat', 'delete-session') */
   action?: string
@@ -64,7 +62,7 @@ export interface DeepLinkResult {
  * Navigation payload sent to renderer via IPC
  */
 export interface DeepLinkNavigation {
-  /** Compound route format (e.g., 'allSessions/session/abc123', 'settings/shortcuts') */
+  /** Compound route format (e.g., 'allSessions/session/abc123') */
   view?: string
   /** Action route (e.g., 'new-chat', 'delete-session') */
   action?: string
@@ -115,10 +113,10 @@ export function parseDeepLink(url: string): DeepLinkTarget | null {
 
     // Compound route prefixes
     const COMPOUND_ROUTE_PREFIXES = [
-      'allSessions', 'flagged', 'state', 'sources', 'settings', 'skills'
+      'allSessions', 'flagged', 'state', 'sources', 'skills'
     ]
 
-    // craftagents://allSessions/..., craftagents://settings/..., etc. (compound routes)
+    // craftagents://allSessions/..., craftagents://sources/..., etc. (compound routes)
     if (COMPOUND_ROUTE_PREFIXES.includes(host)) {
       // Reconstruct the full compound route from host + pathname
       const viewRoute = pathParts.length > 0 ? `${host}/${pathParts.join('/')}` : host

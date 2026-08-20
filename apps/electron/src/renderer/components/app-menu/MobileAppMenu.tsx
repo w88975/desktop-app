@@ -7,7 +7,6 @@ import { motion, AnimatePresence } from 'motion/react'
 import { useRegisterDismissibleLayer } from '@/context/DismissibleLayerContext'
 import { CraftAgentsSymbol } from '../icons/CraftAgentsSymbol'
 import { SquarePenRounded } from '../icons/SquarePenRounded'
-import { SETTINGS_ICONS } from '../icons/SettingsIcons'
 import { TopBarButton } from '../ui/TopBarButton'
 import { MobileMenuPage } from './MobileMenuPage'
 import { MobileMenuItem, type MobileMenuItemAffordance } from './MobileMenuItem'
@@ -65,12 +64,6 @@ function renderRowIcon(iconName: string, rowId: string): React.ReactNode {
   // local rounded variant to match the desktop dropdown.
   if (rowId === 'newChat') {
     return <SquarePenRounded className="h-5 w-5" />
-  }
-  // Settings rows pull from the dedicated SETTINGS_ICONS map (custom-shaped icons).
-  const settingsKey = rowId.startsWith('settings-') ? rowId.replace(/^settings-/, '') : null
-  if (settingsKey && settingsKey !== 'overview') {
-    const Icon = SETTINGS_ICONS[settingsKey as keyof typeof SETTINGS_ICONS]
-    if (Icon) return <Icon className="h-5 w-5" />
   }
   const Icon = getIcon(iconName)
   return Icon ? <Icon className="h-5 w-5" /> : null
@@ -151,12 +144,7 @@ export function MobileAppMenu(props: AppMenuProps) {
         switch (row.action.key) {
           case 'newChat': props.onNewChat(); break
           case 'newWindow': props.onNewWindow?.(); break
-          case 'openSettings': props.onOpenSettings(); break
         }
-        close()
-        return
-      case 'settingsSubpage':
-        props.onOpenSettingsSubpage(row.action.subpage)
         close()
         return
       case 'url':

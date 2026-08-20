@@ -115,7 +115,6 @@ const EXPECTED_CHANNELS: string[] = [
   'menu:minimize',
   'menu:newChat',
   'menu:newWindow',
-  'menu:openSettings',
   'menu:paste',
   'menu:quit',
   'menu:redo',

@@ -2,12 +2,10 @@ import {
   ROOT_MENU,
   HELP_LINKS,
   DEBUG_MENU,
-  SETTINGS_ITEMS,
-  type SettingsMenuItem,
 } from '../../../shared/menu-schema'
 
 /** Identifies one of the mobile menu pages. */
-export type MobileMenuPageId = 'root' | 'settings' | 'help' | 'debug'
+export type MobileMenuPageId = 'root' | 'help' | 'debug'
 
 /**
  * What a mobile menu row does on tap.
@@ -17,8 +15,7 @@ export type MobileMenuPageId = 'root' | 'settings' | 'help' | 'debug'
  */
 export type MobileMenuAction =
   | { kind: 'navigate'; to: MobileMenuPageId }
-  | { kind: 'callback'; key: 'newChat' | 'newWindow' | 'openSettings' }
-  | { kind: 'settingsSubpage'; subpage: SettingsMenuItem['id'] }
+  | { kind: 'callback'; key: 'newChat' | 'newWindow' }
   | { kind: 'url'; url: string }
   | { kind: 'electronApi'; method: 'checkForUpdates' | 'installUpdate' | 'menuToggleDevTools' }
 
@@ -52,7 +49,7 @@ interface BuildOptions {
  * - Quit — also meaningless in a browser tab.
  *
  * Adding a new help link requires only an addition to `HELP_LINKS`. Adding a new
- * settings page requires only an addition to `SETTINGS_PAGES`. Both fan out here.
+ * Help links continue to fan out from `HELP_LINKS`.
  */
 export function buildMobileMenuPages({ hasNewWindow, isDebugMode }: BuildOptions): MobileMenuPage[] {
   const rootRows: MobileMenuRow[] = [
@@ -75,12 +72,6 @@ export function buildMobileMenuPages({ hasNewWindow, isDebugMode }: BuildOptions
   // on mobile — the page would render but be useless.
   rootRows.push(
     {
-      id: 'settings',
-      iconName: 'Settings',
-      labelKey: 'sidebar.settings',
-      action: { kind: 'navigate', to: 'settings' },
-    },
-    {
       id: 'help',
       iconName: 'HelpCircle',
       labelKey: 'menu.help',
@@ -95,22 +86,6 @@ export function buildMobileMenuPages({ hasNewWindow, isDebugMode }: BuildOptions
       action: { kind: 'navigate', to: 'debug' },
     })
   }
-
-  const settingsRows: MobileMenuRow[] = [
-    {
-      id: 'settings-overview',
-      iconName: 'Settings',
-      labelKey: 'menu.settings',
-      action: { kind: 'callback', key: 'openSettings' },
-    },
-    ...SETTINGS_ITEMS.map<MobileMenuRow>((item) => ({
-      id: `settings-${item.id}`,
-      iconName: item.icon,
-      labelKey: item.labelKey,
-      description: item.descriptionKey,
-      action: { kind: 'settingsSubpage', subpage: item.id },
-    })),
-  ]
 
   const helpRows: MobileMenuRow[] = HELP_LINKS.map<MobileMenuRow>((link) => ({
     id: link.id,
@@ -140,7 +115,6 @@ export function buildMobileMenuPages({ hasNewWindow, isDebugMode }: BuildOptions
 
   return [
     { id: 'root', titleKey: 'menu.craftMenu', rows: rootRows },
-    { id: 'settings', titleKey: 'sidebar.settings', rows: settingsRows },
     { id: 'help', titleKey: 'menu.help', rows: helpRows },
     { id: 'debug', titleKey: DEBUG_MENU.labelKey, rows: debugRows },
   ]

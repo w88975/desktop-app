@@ -433,6 +433,7 @@ client.onConnectionStateChanged((state) => {
 ;(api as ElectronAPI).unfocusAgentTab = () => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.UNFOCUS_AGENT_TAB)
 ;(api as ElectronAPI).dockAgentAsPanel = () => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.DOCK_AGENT_AS_PANEL)
 ;(api as ElectronAPI).toggleAgentPanel = () => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.TOGGLE_AGENT_PANEL)
+;(api as ElectronAPI).openSettings = (subpage) => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.OPEN_SETTINGS, subpage)
 ;(api as ElectronAPI).onAgentShellCommand = (callback: (command: AgentShellCommand) => void) => {
   const handler = (_event: Electron.IpcRendererEvent, command: AgentShellCommand) => callback(command)
   ipcRenderer.on(APP_PLATFORM_CHANNELS.AGENT_COMMAND_RECEIVED, handler)
@@ -479,5 +480,50 @@ client.onConnectionStateChanged((state) => {
   }
 }
 
-contextBridge.exposeInMainWorld('electronAPI', api)
-contextBridge.exposeInMainWorld('authAPI', createAuthAPI())
+const isSettingsPreload = __filename.endsWith('settings-preload.cjs')
+
+const SETTINGS_API_KEYS = new Set([
+  'allowMessagingPendingSender', 'broadcastThemePreferences', 'broadcastWorkspaceThemeChange',
+  'browseForGitBash', 'cancelProcessing', 'changeLanguage', 'checkForUpdates', 'checkGitBash',
+  'clearClaudeOAuthState', 'deferSetup', 'deleteLlmConnection', 'disconnectMessagingPlatform',
+  'dismissMessagingPendingSender', 'dismissUpdate', 'exchangeClaudeCode', 'forgetMessagingPlatform',
+  'generateMessagingPairingCode', 'getAllWorkspaceThemes', 'getAutoCapitalisation',
+  'getBrowserToolEnabled', 'getColorTheme', 'getCredentialHealth', 'getDefaultPermissionsConfig',
+  'getDefaultThinkingLevel', 'getDismissedUpdateVersion', 'getEnable1MContext',
+  'getExtendedPromptCache', 'getHomeDir', 'getKeepAwakeWhileRunning', 'getLlmConnection',
+  'getLlmConnectionApiKey', 'getMessagingBindings', 'getMessagingConfig',
+  'getMessagingPendingSenders', 'getMessagingPlatformAccessMode', 'getMessagingPlatformOwners',
+  'getMessagingSupergroup', 'getNetworkProxySettings', 'getNotificationsEnabled',
+  'getPiProviderBaseUrl', 'getRichToolDescriptions', 'getRtkEnabled', 'getRtkGain', 'getRtkStatus',
+  'getRuntimeEnvironment', 'getSendMessageKey', 'getServerConfig', 'getServerHomeDir',
+  'getServerStatus', 'getSessions', 'getSources', 'getSpellCheck', 'getSystemTheme',
+  'getToolIconMappings', 'getUpdateInfo', 'getWorkspaceColorTheme',
+  'getWorkspacePermissionsConfig', 'getWorkspaceSettings', 'getWorkspaces', 'installUpdate',
+  'isChannelAvailable', 'listLabels', 'listLlmConnectionsWithStatus', 'listServerDirectory',
+  'loadPresetTheme', 'loadPresetThemes', 'onCopilotDeviceCode', 'onDefaultPermissionsChanged',
+  'onLabelsChanged', 'onMessagingBindingChanged', 'onMessagingPendingChanged',
+  'onLlmConnectionsChanged', 'onSessionEvent',
+  'onMessagingPlatformStatus', 'onSourcesChanged', 'onSystemThemeChange',
+  'onThemePreferencesChange', 'onUpdateAvailable', 'onUpdateDownloadProgress',
+  'onWhatsAppEvent', 'onWorkspaceThemeChange', 'openFileDialog', 'openFolderDialog', 'openUrl',
+  'openFile', 'readFile', 'readFileBinary', 'readFileDataUrl', 'showInFolder',
+  'readPreferences', 'readWorkspaceImage', 'relaunchApp', 'saveLarkCredentials',
+  'saveLlmConnection', 'saveTelegramToken', 'setAutoCapitalisation', 'setBrowserToolEnabled',
+  'setDefaultLlmConnection', 'setDefaultThinkingLevel', 'setEnable1MContext',
+  'setExtendedPromptCache', 'setGitBashPath', 'setKeepAwakeWhileRunning',
+  'setMessagingBindingAccess', 'setMessagingPlatformAccessMode', 'setMessagingPlatformOwners',
+  'setNetworkProxySettings', 'setNotificationsEnabled', 'setRichToolDescriptions',
+  'setRtkEnabled', 'setSendMessageKey', 'setServerConfig', 'setSpellCheck',
+  'setWorkspaceColorTheme', 'setupLlmConnection', 'startChatGptOAuth', 'startClaudeOAuth',
+  'startCopilotOAuth', 'switchWorkspace', 'testLarkCredentials', 'testLlmConnection',
+  'startWhatsAppConnect', 'generateMessagingSupergroupCode',
+  'testLlmConnectionSetup', 'testTelegramToken', 'unbindMessagingBinding',
+  'unbindMessagingSupergroup', 'updateWorkspaceSetting', 'writePreferences', 'writeWorkspaceImage',
+])
+
+const exposedApi = isSettingsPreload
+  ? Object.fromEntries(Object.entries(api).filter(([key]) => SETTINGS_API_KEYS.has(key)))
+  : api
+
+contextBridge.exposeInMainWorld('electronAPI', exposedApi)
+if (!isSettingsPreload) contextBridge.exposeInMainWorld('authAPI', createAuthAPI())

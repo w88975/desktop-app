@@ -16,7 +16,6 @@ import type {
   AutomationFilter,
   RightSidebarPanel,
 } from './types'
-import { isValidSettingsSubpage, type SettingsSubpage } from './settings-registry'
 
 // =============================================================================
 // Route Types
@@ -35,7 +34,7 @@ export interface ParsedRoute {
 // Compound Route Types (new format)
 // =============================================================================
 
-export type NavigatorType = 'sessions' | 'sources' | 'skills' | 'automations' | 'projects' | 'settings'
+export type NavigatorType = 'sessions' | 'sources' | 'skills' | 'automations' | 'projects'
 
 export interface ParsedCompoundRoute {
   /** The navigator type */
@@ -63,7 +62,7 @@ export interface ParsedCompoundRoute {
  * Known prefixes that indicate a compound route
  */
 const COMPOUND_ROUTE_PREFIXES = [
-  'allSessions', 'flagged', 'archived', 'state', 'label', 'view', 'board', 'sources', 'skills', 'automations', 'projects', 'settings'
+  'allSessions', 'flagged', 'archived', 'state', 'label', 'view', 'board', 'sources', 'skills', 'automations', 'projects'
 ]
 
 /**
@@ -87,8 +86,6 @@ export function isCompoundRoute(route: string): boolean {
  *   'sources/local' -> { navigator: 'sources', sourceFilter: { kind: 'type', sourceType: 'local' }, details: null }
  *   'sources/source/github' -> { navigator: 'sources', details: { type: 'source', id: 'github' } }
  *   'sources/api/source/gmail' -> { navigator: 'sources', sourceFilter: { kind: 'type', sourceType: 'api' }, details: { type: 'source', id: 'gmail' } }
- *   'settings' -> { navigator: 'settings', details: null }  // navigator-only view
- *   'settings/shortcuts' -> { navigator: 'settings', details: { type: 'shortcuts', id: 'shortcuts' } }
  */
 export function parseCompoundRoute(route: string): ParsedCompoundRoute | null {
   // Compound routes are pure slash-segment paths; defensively strip any query tail
@@ -108,20 +105,6 @@ export function parseCompoundRoute(route: string): ParsedCompoundRoute | null {
       sessionFilter: { kind: 'allSessions' },
       viewMode: 'board',
       details: null,
-    }
-  }
-
-  // Settings navigator
-  if (first === 'settings') {
-    const subpage = segments[1]
-    if (subpage === undefined) {
-      // Bare `settings` route — navigator-only view (compact) / App fallback (desktop).
-      return { navigator: 'settings', details: null }
-    }
-    if (!isValidSettingsSubpage(subpage)) return null
-    return {
-      navigator: 'settings',
-      details: { type: subpage, id: subpage },
     }
   }
 
@@ -290,11 +273,6 @@ export function parseCompoundRoute(route: string): ParsedCompoundRoute | null {
  * Build a compound route string from parsed state
  */
 export function buildCompoundRoute(parsed: ParsedCompoundRoute): string {
-  if (parsed.navigator === 'settings') {
-    if (!parsed.details) return 'settings'
-    return `settings/${parsed.details.type}`
-  }
-
   if (parsed.navigator === 'sources') {
     // Build base from filter (sources, sources/api, sources/mcp, sources/local)
     let base = 'sources'
@@ -370,7 +348,6 @@ export function buildCompoundRoute(parsed: ParsedCompoundRoute): string {
  * Examples:
  *   'allSessions' -> { type: 'view', name: 'allSessions', params: {} }
  *   'allSessions/session/abc123' -> { type: 'view', name: 'session', id: 'abc123', params: { filter: 'allSessions' } }
- *   'settings/shortcuts' -> { type: 'view', name: 'shortcuts', params: {} }
  *   'action/new-session' -> { type: 'action', name: 'new-session', params: {} }
  */
 export function parseRoute(route: string): ParsedRoute | null {
@@ -418,15 +395,6 @@ export function parseRoute(route: string): ParsedRoute | null {
  * Convert a parsed compound route to ParsedRoute format (type: 'view')
  */
 function convertCompoundToViewRoute(compound: ParsedCompoundRoute): ParsedRoute {
-  // Settings
-  if (compound.navigator === 'settings') {
-    const subpage = compound.details?.type || 'app'
-    if (subpage === 'app') {
-      return { type: 'view', name: 'settings', params: {} }
-    }
-    return { type: 'view', name: subpage, params: {} }
-  }
-
   // Sources
   if (compound.navigator === 'sources') {
     if (!compound.details) {
@@ -497,7 +465,7 @@ function convertCompoundToViewRoute(compound: ParsedCompoundRoute): ParsedRoute 
  * determines all 3 panels (sidebar, navigator, main content).
  *
  * Supports:
- * - Compound routes: allSessions, allSessions/session/abc, sources, sources/source/github, settings/shortcuts
+ * - Compound routes: allSessions, allSessions/session/abc, sources, sources/source/github
  * - Right sidebar param: ?sidebar=files or ?sidebar=history
  *
  * Returns null for action routes (they don't map to a navigation state) and invalid routes.
@@ -543,14 +511,6 @@ export function parseRouteToNavigationState(
  * Convert a ParsedCompoundRoute to NavigationState
  */
 function convertCompoundToNavigationState(compound: ParsedCompoundRoute): NavigationState {
-  // Settings
-  if (compound.navigator === 'settings') {
-    if (!compound.details) {
-      return { navigator: 'settings', subpage: null }
-    }
-    return { navigator: 'settings', subpage: compound.details.type as SettingsSubpage }
-  }
-
   // Sources - include filter if present
   if (compound.navigator === 'sources') {
     if (!compound.details) {
@@ -632,18 +592,6 @@ function convertParsedRouteToNavigationState(parsed: ParsedRoute): NavigationSta
   }
 
   switch (parsed.name) {
-    case 'settings':
-      return { navigator: 'settings', subpage: 'app' }
-    case 'workspace':
-      return { navigator: 'settings', subpage: 'workspace' }
-    case 'permissions':
-      return { navigator: 'settings', subpage: 'permissions' }
-    case 'labels':
-      return { navigator: 'settings', subpage: 'labels' }
-    case 'shortcuts':
-      return { navigator: 'settings', subpage: 'shortcuts' }
-    case 'preferences':
-      return { navigator: 'settings', subpage: 'preferences' }
     case 'sources':
       return { navigator: 'sources', details: null }
     case 'source-info':
@@ -768,16 +716,6 @@ function convertParsedRouteToNavigationState(parsed: ParsedRoute): NavigationSta
  * Convert NavigationState to ParsedCompoundRoute
  */
 function navigationStateToCompoundRoute(state: NavigationState): ParsedCompoundRoute {
-  if (state.navigator === 'settings') {
-    if (state.subpage === null) {
-      return { navigator: 'settings', details: null }
-    }
-    return {
-      navigator: 'settings',
-      details: { type: state.subpage, id: state.subpage },
-    }
-  }
-
   if (state.navigator === 'sources') {
     return {
       navigator: 'sources',

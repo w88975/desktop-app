@@ -362,54 +362,6 @@ export const DEBUG_MENU: MenuSection = {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Settings Menu Items
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Settings item definition
- * Used by both AppMenu (logo dropdown) and SettingsNavigator (sidebar panel)
- */
-import { SETTINGS_PAGES, type SettingsSubpage } from './settings-registry'
-
-export interface SettingsMenuItem {
-  id: SettingsSubpage
-  labelKey: string    // i18n key - resolve with t() at render time
-  icon: string        // Lucide icon name for AppMenu
-  descriptionKey: string // i18n key - resolve with t() at render time
-}
-
-/**
- * Icon mapping for settings pages (Lucide icon names)
- * Only icons need to be defined here - page data comes from settings-registry
- */
-const SETTINGS_ICONS: Record<SettingsSubpage, string> = {
-  app: 'ToggleRight',
-  ai: 'Sparkles',
-  appearance: 'Palette',
-  input: 'Keyboard',
-  workspace: 'Building2',
-  permissions: 'ShieldCheck',
-  labels: 'Tag',
-  messaging: 'MessageSquare',
-  server: 'Server',
-  shortcuts: 'Keyboard',
-  preferences: 'UserCircle',
-}
-
-/**
- * All settings pages - derived from settings-registry (single source of truth)
- * Order is determined by SETTINGS_PAGES in settings-registry.ts
- */
-export const SETTINGS_ITEMS: SettingsMenuItem[] = SETTINGS_PAGES
-  .filter(page => page.id !== 'server' || FEATURE_FLAGS.embeddedServer)
-  .map(page => ({
-    id: page.id,
-    labelKey: page.labelKey,
-    icon: SETTINGS_ICONS[page.id],
-    descriptionKey: page.descriptionKey,
-  }))
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 

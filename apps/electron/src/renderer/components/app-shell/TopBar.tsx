@@ -22,7 +22,6 @@ import {
   StyledDropdownMenuItem,
   StyledDropdownMenuSeparator,
 } from "@/components/ui/styled-dropdown"
-import type { SettingsMenuItem } from "../../../shared/menu-schema"
 import { SquarePenRounded } from "../icons/SquarePenRounded"
 import { useEffect, useRef, useState } from "react"
 import { BrowserTabStrip } from "../browser/BrowserTabStrip"
@@ -45,10 +44,7 @@ interface TopBarProps {
   activeSessionId?: string | null
   onNewChat: () => void
   onNewWindow?: () => void
-  onOpenSettings: () => void
-  onOpenSettingsSubpage: (subpage: SettingsMenuItem['id']) => void
   onOpenKeyboardShortcuts: () => void
-  onOpenStoredUserPreferences: () => void
   onBack: () => void
   onForward: () => void
   canGoBack: boolean
@@ -71,10 +67,7 @@ export function TopBar({
   activeSessionId,
   onNewChat,
   onNewWindow,
-  onOpenSettings,
-  onOpenSettingsSubpage,
   onOpenKeyboardShortcuts,
-  onOpenStoredUserPreferences,
   onBack,
   onForward,
   canGoBack,
@@ -159,10 +152,7 @@ export function TopBar({
         <AppMenu
           onNewChat={onNewChat}
           onNewWindow={onNewWindow}
-          onOpenSettings={onOpenSettings}
-          onOpenSettingsSubpage={onOpenSettingsSubpage}
           onOpenKeyboardShortcuts={onOpenKeyboardShortcuts}
-          onOpenStoredUserPreferences={onOpenStoredUserPreferences}
           onToggleSidebar={onToggleSidebar}
           onToggleFocusMode={onToggleFocusMode}
         />

@@ -16,7 +16,7 @@ import { PanelHeader } from '@/components/app-shell/PanelHeader'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { HeaderMenu } from '@/components/ui/HeaderMenu'
 import { Loader2 } from 'lucide-react'
-import { useAppShellContext, useActiveWorkspace } from '@/context/AppShellContext'
+import { useSettingsRuntime, useSettingsWorkspace } from '../SettingsRuntimeContext'
 import { type PermissionsConfigFile } from '@craft-agent/shared/agent/modes'
 import {
   PermissionsDataTable,
@@ -28,13 +28,6 @@ import {
 } from '@/components/settings'
 import { EditPopover, EditButton, getEditConfig } from '@/components/ui/EditPopover'
 import { getDocUrl } from '@craft-agent/shared/docs/doc-links'
-import { routes } from '@/lib/navigate'
-import type { DetailsPageMeta } from '@/lib/navigation-registry'
-
-export const meta: DetailsPageMeta = {
-  navigator: 'settings',
-  slug: 'permissions',
-}
 
 /**
  * Build default permissions data from ~/.craft-agent/permissions/default.json.
@@ -132,8 +125,8 @@ function buildCustomPermissionsData(config: PermissionsConfigFile, fallbackLabel
 
 export default function PermissionsSettingsPage() {
   const { t } = useTranslation()
-  const { activeWorkspaceId } = useAppShellContext()
-  const activeWorkspace = useActiveWorkspace()
+  const { workspaceId: activeWorkspaceId } = useSettingsRuntime()
+  const activeWorkspace = useSettingsWorkspace()
 
   // Loading and data state
   const [isLoading, setIsLoading] = useState(true)
@@ -204,7 +197,7 @@ export default function PermissionsSettingsPage() {
 
   return (
     <div className="h-full flex flex-col">
-      <PanelHeader title={t("settings.permissions.title")} actions={<HeaderMenu route={routes.view.settings('permissions')} helpFeature="permissions" />} />
+      <PanelHeader title={t("settings.permissions.title")} actions={<HeaderMenu helpFeature="permissions" />} />
       <div className="flex-1 min-h-0 mask-fade-y">
         <ScrollArea className="h-full">
           <div className="px-5 py-7 max-w-3xl mx-auto">

@@ -14,17 +14,14 @@ import { useTranslation } from 'react-i18next'
 import { PanelHeader } from '@/components/app-shell/PanelHeader'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
-import { HeaderMenu } from '@/components/ui/HeaderMenu'
-import { routes } from '@/lib/navigate'
 import { X, MoreHorizontal, Pencil, Trash2, Star, ChevronDown, ChevronRight, CheckCircle2, AlertTriangle, RefreshCcw, Settings2, MessageSquareMore, Zap, Clock, Check } from 'lucide-react'
-import type { CredentialHealthStatus, CredentialHealthIssue } from '../../../shared/types'
+import type { CredentialHealthStatus, CredentialHealthIssue } from '../../../../shared/types'
 import { Spinner, FullscreenOverlayBase, Tooltip, TooltipTrigger, TooltipContent } from '@craft-agent/ui'
 import { useSetAtom } from 'jotai'
 import { fullscreenOverlayOpenAtom } from '@/atoms/overlay'
 import { motion, AnimatePresence } from 'motion/react'
-import type { LlmConnectionWithStatus, ThinkingLevel, WorkspaceSettings, Workspace } from '../../../shared/types'
+import type { LlmConnectionWithStatus, ThinkingLevel, WorkspaceSettings, Workspace } from '../../../../shared/types'
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVELS } from '@craft-agent/shared/agent/thinking-levels'
-import type { DetailsPageMeta } from '@/lib/navigation-registry'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -51,7 +48,7 @@ import { useOnboarding } from '@/hooks/useOnboarding'
 import { useWorkspaceIcon } from '@/hooks/useWorkspaceIcon'
 import { OnboardingWizard, type ApiSetupMethod } from '@/components/onboarding'
 import { RenameDialog } from '@/components/ui/rename-dialog'
-import { useAppShellContext } from '@/context/AppShellContext'
+import { useSettingsRuntime } from '../SettingsRuntimeContext'
 import { getModelShortName, type ModelDefinition } from '@config/models'
 import { getModelsForProviderType, resolveMidStreamBehavior, type CustomEndpointApi, type MidStreamBehavior } from '@config/llm-connections'
 import { toast } from 'sonner'
@@ -96,11 +93,6 @@ function getModelOptionsForConnection(
     description: m.description,
     descriptionKey: m.descriptionKey,
   }))
-}
-
-export const meta: DetailsPageMeta = {
-  navigator: 'settings',
-  slug: 'ai',
 }
 
 // ============================================
@@ -625,7 +617,7 @@ function getApiKeyMethodForConnection(conn: LlmConnectionWithStatus): ApiSetupMe
 
 export default function AiSettingsPage() {
   const { t } = useTranslation()
-  const { llmConnections, refreshLlmConnections, activeWorkspaceId } = useAppShellContext()
+  const { llmConnections, refreshLlmConnections, workspaceId: activeWorkspaceId } = useSettingsRuntime()
 
   // API Setup overlay state
   const [showApiSetup, setShowApiSetup] = useState(false)
@@ -927,7 +919,7 @@ export default function AiSettingsPage() {
     try {
       const updated = { ...connection, midStreamBehavior: behavior }
       const { isAuthenticated: _a, authError: _b, isDefault: _c, ...connectionData } = updated
-      const result = await window.electronAPI.saveLlmConnection(connectionData as import('../../../shared/types').LlmConnection)
+      const result = await window.electronAPI.saveLlmConnection(connectionData as import('../../../../shared/types').LlmConnection)
       if (result.success) {
         refreshLlmConnections?.()
       } else {
@@ -965,7 +957,7 @@ export default function AiSettingsPage() {
     const updated = { ...defaultConnection, defaultModel: model }
     // Remove status fields that aren't part of LlmConnection
     const { isAuthenticated: _a, authError: _b, isDefault: _c, ...connectionData } = updated
-    await window.electronAPI.saveLlmConnection(connectionData as import('../../../shared/types').LlmConnection)
+    await window.electronAPI.saveLlmConnection(connectionData as import('../../../../shared/types').LlmConnection)
     await refreshLlmConnections()
   }, [defaultConnection, refreshLlmConnections])
 
@@ -1038,7 +1030,7 @@ export default function AiSettingsPage() {
 
   return (
     <div className="h-full flex flex-col">
-      <PanelHeader title={t("settings.ai.title")} actions={<HeaderMenu route={routes.view.settings('ai')} />} />
+      <PanelHeader title={t("settings.ai.title")} />
       <div className="flex-1 min-h-0 mask-fade-y">
         <ScrollArea className="h-full">
           <div className="px-5 py-7 max-w-3xl mx-auto">

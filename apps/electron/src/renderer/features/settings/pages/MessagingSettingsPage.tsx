@@ -61,26 +61,19 @@ import {
   type PlatformAccessMode,
   type PlatformOwner,
 } from '@/components/messaging/access'
-import { useActiveWorkspace } from '@/context/AppShellContext'
-import { useNavigation } from '@/contexts/NavigationContext'
+import { useSettingsRuntime, useSettingsWorkspace } from '../SettingsRuntimeContext'
 import {
   messagingBindingsAtom,
   setMessagingBindingsAtom,
   type MessagingBinding,
 } from '@/atoms/messaging'
-import { sessionMetaMapAtom, type SessionMeta } from '@/atoms/sessions'
+import type { Session } from '../../../../shared/types'
 import { getSessionTitle } from '@/utils/session'
-import type { DetailsPageMeta } from '@/lib/navigation-registry'
-import type { MessagingPlatformRuntimeInfo } from '../../../shared/types'
-
-export const meta: DetailsPageMeta = {
-  navigator: 'settings',
-  slug: 'messaging',
-}
+import type { MessagingPlatformRuntimeInfo } from '../../../../shared/types'
 
 export default function MessagingSettingsPage() {
   const { t } = useTranslation()
-  const activeWorkspace = useActiveWorkspace()
+  const activeWorkspace = useSettingsWorkspace()
   const setBindings = useSetAtom(setMessagingBindingsAtom)
   const workspaceId = activeWorkspace?.id
 
@@ -190,8 +183,11 @@ function CardSeparator() {
 function PlatformRow({ platform, workspaceId }: { platform: Platform; workspaceId: string }) {
   const { t } = useTranslation()
   const allBindings = useAtomValue(messagingBindingsAtom)
-  const sessionMetaMap = useAtomValue(sessionMetaMapAtom)
-  const { navigateToSession } = useNavigation()
+  const { sessions, openAgentConversation } = useSettingsRuntime()
+  const sessionMetaMap = React.useMemo(
+    () => new Map(sessions.map(session => [session.id, session])),
+    [sessions],
+  )
   const [runtime, setRuntime] = React.useState<MessagingPlatformRuntimeInfo>(() =>
     defaultRuntime(platform),
   )
@@ -430,7 +426,7 @@ function PlatformRow({ platform, workspaceId }: { platform: Platform; workspaceI
                   toast.error(err instanceof Error ? err.message : t('common.error'))
                 }
               }}
-              onOpenSession={(b) => navigateToSession(b.sessionId)}
+              onOpenSession={(b) => { void openAgentConversation(b.sessionId) }}
               onUnbind={handleUnbind}
             />
           </>
@@ -443,7 +439,7 @@ function PlatformRow({ platform, workspaceId }: { platform: Platform; workspaceI
                   key={binding.id}
                   binding={binding}
                   sessionMetaMap={sessionMetaMap}
-                  onOpen={() => navigateToSession(binding.sessionId)}
+                  onOpen={() => { void openAgentConversation(binding.sessionId) }}
                   onUnbind={() => handleUnbind(binding)}
                 />
               ))}
@@ -468,7 +464,7 @@ function PlatformRow({ platform, workspaceId }: { platform: Platform; workspaceI
         </>
       )}
       {platform === 'whatsapp' && (
-        <WhatsAppConnectDialog open={connectOpen} onOpenChange={setConnectOpen} />
+        <WhatsAppConnectDialog open={connectOpen} onOpenChange={setConnectOpen} workspaceId={workspaceId} />
       )}
       {platform === 'lark' && (
         <LarkConnectDialog open={connectOpen} onOpenChange={setConnectOpen} reconfigure={reconfigure} />
@@ -483,7 +479,7 @@ function PlatformRow({ platform, workspaceId }: { platform: Platform; workspaceI
 
 interface TelegramBindingsBodyProps {
   bindings: MessagingBinding[]
-  sessionMetaMap: Map<string, SessionMeta>
+  sessionMetaMap: Map<string, Session>
   supergroup: { chatId: string; title: string } | null
   onPairSupergroup: () => void
   onUnpairSupergroup: () => void

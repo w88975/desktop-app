@@ -18,10 +18,8 @@ import { PanelHeader } from '@/components/app-shell/PanelHeader'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { HeaderMenu } from '@/components/ui/HeaderMenu'
-import { routes } from '@/lib/navigate'
 import { Spinner } from '@craft-agent/ui'
-import type { DetailsPageMeta } from '@/lib/navigation-registry'
-import type { NetworkProxySettings } from '../../../shared/types'
+import type { NetworkProxySettings } from '../../../../shared/types'
 
 import {
   SettingsSection,
@@ -33,11 +31,6 @@ import {
 } from '@/components/settings'
 import { useUpdateChecker } from '@/hooks/useUpdateChecker'
 import { FEATURE_FLAGS } from '@craft-agent/shared/feature-flags'
-
-export const meta: DetailsPageMeta = {
-  navigator: 'settings',
-  slug: 'app',
-}
 
 // ============================================
 // Proxy form helpers
@@ -202,7 +195,7 @@ export default function AppSettingsPage() {
 
   return (
     <div className="h-full flex flex-col">
-      <PanelHeader title={t("settings.app.title")} actions={<HeaderMenu route={routes.view.settings('app')} helpFeature="app-settings" />} />
+      <PanelHeader title={t("settings.app.title")} actions={<HeaderMenu helpFeature="app-settings" />} />
       <div className="flex-1 min-h-0 mask-fade-y">
         <ScrollArea className="h-full">
           <div className="px-5 py-7 max-w-3xl mx-auto">

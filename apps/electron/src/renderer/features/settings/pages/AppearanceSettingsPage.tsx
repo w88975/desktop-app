@@ -14,11 +14,9 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { HeaderMenu } from '@/components/ui/HeaderMenu'
 import { EditPopover, EditButton, getEditConfig } from '@/components/ui/EditPopover'
 import { useTheme } from '@/context/ThemeContext'
-import { useAppShellContext } from '@/context/AppShellContext'
-import { routes } from '@/lib/navigate'
+import { useSettingsRuntime } from '../SettingsRuntimeContext'
 import { Monitor, Sun, Moon } from 'lucide-react'
-import type { DetailsPageMeta } from '@/lib/navigation-registry'
-import type { ToolIconMapping } from '../../../shared/types'
+import type { ToolIconMapping } from '../../../../shared/types'
 
 import {
   SettingsSection,
@@ -44,11 +42,6 @@ import { PROJECT_COLOR_PALETTE, type ProjectColorTreatment } from '@/utils/proje
 import { Info_DataTable, SortableHeader } from '@/components/info/Info_DataTable'
 import { Info_Badge } from '@/components/info/Info_Badge'
 import type { PresetTheme } from '@config/theme'
-
-export const meta: DetailsPageMeta = {
-  navigator: 'settings',
-  slug: 'appearance',
-}
 
 // ============================================
 // Tool Icons Table
@@ -121,7 +114,8 @@ export default function AppearanceSettingsPage() {
     themeLoadError,
     themeResolvedFrom,
   } = useTheme()
-  const { workspaces, sessionStatuses } = useAppShellContext()
+  const { workspaces } = useSettingsRuntime()
+  const sessionStatuses: { id: string; label: string }[] = []
 
   // Fetch workspace icons as data URLs (file:// URLs don't work in renderer)
   const workspaceIconMap = useWorkspaceIcons(workspaces)
@@ -145,6 +139,13 @@ export default function AppearanceSettingsPage() {
   const handleConnectionIconsChange = useCallback((checked: boolean) => {
     setShowConnectionIcons(checked)
     storage.set(storage.KEYS.showConnectionIcons, checked)
+  }, [])
+  useEffect(() => {
+    const syncConnectionIcons = () => {
+      setShowConnectionIcons(storage.get(storage.KEYS.showConnectionIcons, true))
+    }
+    window.addEventListener('storage', syncConnectionIcons)
+    return () => window.removeEventListener('storage', syncConnectionIcons)
   }, [])
 
   // Project color treatment in the SessionList
@@ -309,7 +310,7 @@ export default function AppearanceSettingsPage() {
     <div className="h-full flex flex-col">
       <PanelHeader
         title={t("settings.appearance.title")}
-        actions={<HeaderMenu route={routes.view.settings('appearance')} helpFeature="themes" />}
+        actions={<HeaderMenu helpFeature="themes" />}
       />
       <div className="flex-1 min-h-0 mask-fade-y">
         <ScrollArea className="h-full">

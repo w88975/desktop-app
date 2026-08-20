@@ -6,19 +6,16 @@
  */
 
 // Import shared types - single source of truth
-import type { SessionFilter, SettingsSubpage } from '../../../shared/types'
-export type { SessionFilter, SettingsSubpage }
+import type { SessionFilter } from '../../../shared/types'
+export type { SessionFilter }
 
 /**
  * Sidebar mode - determines what content is shown in the 2nd sidebar
  *
- * Settings `subpage: null` matches the bare `settings` route — used when the user
- * is on the navigator-only view in compact mode.
  */
 export type SidebarMode =
   | { type: 'sessions'; filter: SessionFilter }
   | { type: 'sources' }
-  | { type: 'settings'; subpage: SettingsSubpage | null }
 
 /**
  * Type guard to check if mode is sessions mode
@@ -35,21 +32,11 @@ export const isSourcesMode = (
 ): mode is { type: 'sources' } => mode.type === 'sources'
 
 /**
- * Type guard to check if mode is settings mode
- */
-export const isSettingsMode = (
-  mode: SidebarMode
-): mode is { type: 'settings'; subpage: SettingsSubpage | null } => mode.type === 'settings'
-
-/**
  * Get a persistence key for localStorage
  * Used to save/restore the last selected sidebar mode
  */
 export const getSidebarModeKey = (mode: SidebarMode): string => {
   if (mode.type === 'sources') return 'sources'
-  if (mode.type === 'settings') {
-    return mode.subpage === null ? 'settings' : `settings:${mode.subpage}`
-  }
   const f = mode.filter
   if (f.kind === 'state') return `state:${f.stateId}`
   return f.kind
@@ -67,13 +54,6 @@ export const parseSidebarModeKey = (key: string): SidebarMode | null => {
     const stateId = key.slice(6)
     if (stateId) return { type: 'sessions', filter: { kind: 'state', stateId } }
   }
-  if (key.startsWith('settings:')) {
-    const subpage = key.slice(9) as SettingsSubpage
-    if (['app', 'appearance', 'workspace', 'permissions', 'labels', 'shortcuts', 'preferences'].includes(subpage)) {
-      return { type: 'settings', subpage }
-    }
-  }
-  if (key === 'settings') return { type: 'settings', subpage: null }
   return null
 }
 

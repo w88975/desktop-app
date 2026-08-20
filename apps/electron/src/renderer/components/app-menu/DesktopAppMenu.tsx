@@ -16,13 +16,11 @@ import {
 } from "@/components/ui/styled-dropdown"
 import { CraftAgentsSymbol } from "../icons/CraftAgentsSymbol"
 import { SquarePenRounded } from "../icons/SquarePenRounded"
-import { SETTINGS_ICONS } from "../icons/SettingsIcons"
 import { TopBarButton } from "../ui/TopBarButton"
 import {
   EDIT_MENU,
   VIEW_MENU,
   WINDOW_MENU,
-  SETTINGS_ITEMS,
   ROOT_MENU,
   HELP_LINKS,
   DEBUG_MENU,
@@ -140,8 +138,6 @@ function renderMenuSection(
 export function DesktopAppMenu({
   onNewChat,
   onNewWindow,
-  onOpenSettings,
-  onOpenSettingsSubpage,
   onOpenKeyboardShortcuts,
   onToggleSidebar,
   onToggleFocusMode,
@@ -151,7 +147,6 @@ export function DesktopAppMenu({
 
   const newChatHotkey = useActionLabel('app.newChat').hotkey
   const newWindowHotkey = useActionLabel('app.newWindow').hotkey
-  const settingsHotkey = useActionLabel('app.settings').hotkey
   const keyboardShortcutsHotkey = useActionLabel('app.keyboardShortcuts').hotkey
   const quitHotkey = useActionLabel('app.quit').hotkey
 
@@ -192,33 +187,6 @@ export function DesktopAppMenu({
         {renderMenuSection(WINDOW_MENU, actionHandlers, t)}
 
         <StyledDropdownMenuSeparator />
-
-        <DropdownMenuSub>
-          <StyledDropdownMenuSubTrigger>
-            <Icons.Settings className="h-3.5 w-3.5" />
-            {t("sidebar.settings")}
-          </StyledDropdownMenuSubTrigger>
-          <StyledDropdownMenuSubContent>
-            <StyledDropdownMenuItem onClick={onOpenSettings}>
-              <Icons.Settings className="h-3.5 w-3.5" />
-              {t("menu.settings")}
-              {settingsHotkey && <DropdownMenuShortcut className="pl-6">{settingsHotkey}</DropdownMenuShortcut>}
-            </StyledDropdownMenuItem>
-            <StyledDropdownMenuSeparator />
-            {SETTINGS_ITEMS.map((item) => {
-              const Icon = SETTINGS_ICONS[item.id]
-              return (
-                <StyledDropdownMenuItem
-                  key={item.id}
-                  onClick={() => onOpenSettingsSubpage(item.id)}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  {t(item.labelKey)}
-                </StyledDropdownMenuItem>
-              )
-            })}
-          </StyledDropdownMenuSubContent>
-        </DropdownMenuSub>
 
         <DropdownMenuSub>
           <StyledDropdownMenuSubTrigger>

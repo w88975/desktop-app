@@ -47,9 +47,6 @@ export const KEYS = {
   // Last selected session (workspace-scoped via suffix)
   lastSelectedSessionId: 'last-selected-session-id',
 
-  // Settings navigation
-  lastSettingsSubpage: 'last-settings-subpage',
-
   // Appearance
   showConnectionIcons: 'show-connection-icons',
   projectColorTreatment: 'project-color-treatment', // 'stripe' | 'stripe-tint'

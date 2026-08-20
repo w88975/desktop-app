@@ -21,6 +21,7 @@ interface WhatsAppConnectDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onConnected?: () => void
+  workspaceId?: string
 }
 
 type Phase =
@@ -30,10 +31,10 @@ type Phase =
   | { kind: 'connected'; name?: string }
   | { kind: 'error'; message: string }
 
-export function WhatsAppConnectDialog({ open, onOpenChange, onConnected }: WhatsAppConnectDialogProps) {
+export function WhatsAppConnectDialog({ open, onOpenChange, onConnected, workspaceId }: WhatsAppConnectDialogProps) {
   const { t } = useTranslation()
   const activeWorkspace = useActiveWorkspace()
-  const activeWorkspaceId = activeWorkspace?.id
+  const activeWorkspaceId = workspaceId ?? activeWorkspace?.id
   const [phase, setPhase] = React.useState<Phase>({ kind: 'idle' })
 
   React.useEffect(() => {

@@ -34,6 +34,7 @@ type ApiToChannelMapKeys = Exclude<
   | 'unfocusAgentTab' // direct app-platform IPC
   | 'dockAgentAsPanel' // direct app-platform IPC
   | 'toggleAgentPanel' // direct app-platform IPC
+  | 'openSettings' // direct app-platform IPC
   | 'onAgentShellCommand' // direct app-platform IPC listener
   | 'onAgentNavigationIntent' // direct app-platform IPC listener
   | 'notifyAgentRendererReady' // direct app-platform IPC

@@ -92,8 +92,8 @@ export async function rebuildMenu(): Promise<void> {
         {
           label: i18n.t("menu.settings"),
           accelerator: 'CmdOrCtrl+,',
-          registerAccelerator: false,  // Action registry handles the keyboard shortcut
-          click: () => sendToRenderer(RPC_CHANNELS.menu.OPEN_SETTINGS)
+          registerAccelerator: false,
+          click: () => { void windowManager.openSettings() }
         },
         { type: 'separator' as const },
         { role: 'hide' as const, label: i18n.t('menu.hideCraftAgents') },

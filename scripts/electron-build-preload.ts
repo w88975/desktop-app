@@ -35,6 +35,11 @@ const OUTPUTS = [
     label: "auth-preload.cjs",
   },
   {
+    entry: "apps/electron/src/preload/settings.ts",
+    outfile: "apps/electron/dist/settings-preload.cjs",
+    label: "settings-preload.cjs",
+  },
+  {
     entry: "apps/electron/src/preload/app-host.ts",
     outfile: "apps/electron/dist/app-host-preload.cjs",
     label: "app-host-preload.cjs",

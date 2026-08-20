@@ -118,9 +118,7 @@ export interface AppShellContextType {
   onRefreshWorkspaces?: () => void
 
   // App actions
-  onOpenSettings: () => void
   onOpenKeyboardShortcuts: () => void
-  onOpenStoredUserPreferences: () => void
   onReset: () => void
 
   // Unified session options callback
@@ -218,7 +216,9 @@ export function useSession(sessionId: string): Session | null {
  * Get the active workspace
  */
 export function useActiveWorkspace(): Workspace | null {
-  const { workspaces, activeWorkspaceId } = useAppShellContext()
+  const context = useOptionalAppShellContext()
+  if (!context) return null
+  const { workspaces, activeWorkspaceId } = context
   if (!activeWorkspaceId) return null
   return workspaces.find((w) => w.id === activeWorkspaceId) || null
 }
@@ -227,16 +227,14 @@ export function useActiveWorkspace(): Workspace | null {
  * Get pending permission for a session (first in queue)
  */
 export function usePendingPermission(sessionId: string): PermissionRequest | undefined {
-  const { pendingPermissions } = useAppShellContext()
-  return pendingPermissions.get(sessionId)?.[0]
+  return useOptionalAppShellContext()?.pendingPermissions.get(sessionId)?.[0]
 }
 
 /**
  * Get pending credential request for a session (first in queue)
  */
 export function usePendingCredential(sessionId: string): CredentialRequest | undefined {
-  const { pendingCredentials } = useAppShellContext()
-  return pendingCredentials.get(sessionId)?.[0]
+  return useOptionalAppShellContext()?.pendingCredentials.get(sessionId)?.[0]
 }
 
 /**

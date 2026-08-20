@@ -5,7 +5,6 @@ import { useAtomValue, useStore } from "jotai"
 import { motion, AnimatePresence } from "motion/react"
 import {
   Archive,
-  Settings,
   ChevronRight,
   ChevronDown,
   MoreHorizontal,
@@ -113,13 +112,11 @@ import {
   useNavigationState,
   isSessionsNavigation,
   isSourcesNavigation,
-  isSettingsNavigation,
   isSkillsNavigation,
   isAutomationsNavigation,
   isProjectsNavigation,
   type NavigationState,
 } from "@/contexts/NavigationContext"
-import type { SettingsSubpage } from "../../../shared/types"
 import { SourcesListPanel } from "./SourcesListPanel"
 import { SkillsListPanel } from "./SkillsListPanel"
 import { AutomationsListPanel } from "../automations/AutomationsListPanel"
@@ -134,7 +131,6 @@ import { SendToWorkspaceDialog } from "./SendToWorkspaceDialog"
 import { CreateProjectDialog } from "../projects/CreateProjectDialog"
 import { MessagingDialogHost } from "@/components/messaging/MessagingDialogHost"
 import { EditPopover, getEditConfig, type EditContextKey } from "@/components/ui/EditPopover"
-import SettingsNavigator from "@/pages/settings/SettingsNavigator"
 import {
   PANEL_GAP,
   PANEL_EDGE_INSET,
@@ -492,8 +488,6 @@ function FilterLabelItems({
  */
 export function AppShell(props: AppShellProps) {
   const { isPanel } = useAgentPresentation()
-  const { onOpenSettings, onOpenKeyboardShortcuts } = props.contextValue
-
   useEffect(() => {
     const api = window.electronAPI
     const unsubscribeNavigation = api.onAgentNavigationIntent((intent) => {
@@ -505,14 +499,12 @@ export function AppShell(props: AppShellProps) {
 
   useEffect(() => window.electronAPI.onAgentShellCommand((command: AgentShellCommand) => {
     if (command === 'new-session') navigate(routes.action.newSession())
-    else if (command === 'open-settings') onOpenSettings()
-    else if (command === 'open-shortcuts') onOpenKeyboardShortcuts()
     else if (command === 'toggle-sidebar') {
       requestAnimationFrame(() => {
         window.dispatchEvent(new CustomEvent('agent-shell-command', { detail: command }))
       })
     }
-  }), [onOpenKeyboardShortcuts, onOpenSettings])
+  }), [])
 
   return (
     <EscapeInterruptProvider>
@@ -555,9 +547,7 @@ export function FullAgentShell({
     onMarkSessionUnread,
     onSessionStatusChange,
     onRenameSession,
-    onOpenSettings,
     onOpenKeyboardShortcuts,
-    onOpenStoredUserPreferences,
     onReset,
     onSendMessage,
     openNewChat,
@@ -1263,9 +1253,6 @@ export function FullAgentShell({
   useAction('app.newChat', () => handleNewChat())
   useAction('app.newChatInPanel', () => handleNewChat(true))
 
-  // Settings
-  useAction('app.settings', onOpenSettings)
-
   // Keyboard shortcuts
   useAction('app.keyboardShortcuts', onOpenKeyboardShortcuts)
 
@@ -1873,12 +1860,6 @@ export function FullAgentShell({
     navigate(routes.view.automationsAgentic())
   }, [])
 
-  // Handler for settings view. With no arg → bare `settings` route (navigator-only
-  // in compact mode, App fallback on desktop). With an arg → `settings/<subpage>`.
-  const handleSettingsClick = useCallback((subpage?: SettingsSubpage) => {
-    navigate(routes.view.settings(subpage))
-  }, [])
-
   // Handler for What's New overlay
   const handleWhatsNewClick = useCallback(async () => {
     const content = await window.electronAPI.getReleaseNotes()
@@ -2143,15 +2124,14 @@ export function FullAgentShell({
     }
     flattenTree(labelTree)
 
-    // 3. Sources, Skills, Settings
+    // 3. Sources, Skills, Automations
     result.push({ id: 'nav:sources', type: 'nav', action: handleSourcesClick })
     result.push({ id: 'nav:skills', type: 'nav', action: handleSkillsClick })
     result.push({ id: 'nav:automations', type: 'nav', action: handleAutomationsClick })
-    result.push({ id: 'nav:settings', type: 'nav', action: () => handleSettingsClick() })
     result.push({ id: 'nav:whats-new', type: 'nav', action: handleWhatsNewClick })
 
     return result
-  }, [handleAllSessionsClick, handleFlaggedClick, handleArchivedClick, handleSessionStatusClick, effectiveSessionStatuses, handleLabelClick, labelConfigs, labelTree, viewConfigs, handleViewClick, handleSourcesClick, handleSkillsClick, handleAutomationsClick, handleSettingsClick, handleWhatsNewClick])
+  }, [handleAllSessionsClick, handleFlaggedClick, handleArchivedClick, handleSessionStatusClick, effectiveSessionStatuses, handleLabelClick, labelConfigs, labelTree, viewConfigs, handleViewClick, handleSourcesClick, handleSkillsClick, handleAutomationsClick, handleWhatsNewClick])
 
   // Toggle folder expanded state
   const handleToggleFolder = React.useCallback((path: string) => {
@@ -2285,9 +2265,6 @@ export function FullAgentShell({
         default: return t("sidebar.allAutomations")
       }
     }
-
-    // Settings navigator
-    if (isSettingsNavigation(navState)) return t("sidebar.settings")
 
     // Sessions navigator - use sessionFilter
     if (!sessionFilter) return t("sidebar.allSessions")
@@ -2699,14 +2676,6 @@ export function FullAgentShell({
                     },
                     // --- Separator ---
                     { id: "separator:skills-settings", type: "separator" },
-                    // --- Settings ---
-                    {
-                      id: "nav:settings",
-                      title: t("sidebar.settings"),
-                      icon: Settings,
-                      variant: isSettingsNavigation(navState) ? "default" : "ghost",
-                      onClick: () => handleSettingsClick(),
-                    },
                     // --- What's New ---
                     {
                       id: "nav:whats-new",
@@ -3516,7 +3485,7 @@ export function FullAgentShell({
                 </>
               }
             />
-            {/* Content: SessionList, SourcesListPanel, or SettingsNavigator based on navigation state */}
+            {/* Content: session and feature navigators */}
             {isSourcesNavigation(navState) && (
               /* Sources List - filtered by type if sourceFilter is active */
               <SourcesListPanel
@@ -3563,13 +3532,6 @@ export function FullAgentShell({
                 onDeleteAutomation={handleDeleteAutomation}
                 selectedAutomationId={isAutomationsNavigation(navState) && navState.details ? navState.details.automationId : null}
                 workspaceRootPath={activeWorkspace?.rootPath}
-              />
-            )}
-            {isSettingsNavigation(navState) && (
-              /* Settings Navigator */
-              <SettingsNavigator
-                selectedSubpage={navState.subpage}
-                onSelectSubpage={(subpage) => handleSettingsClick(subpage)}
               />
             )}
             {isSessionsNavigation(navState) && (

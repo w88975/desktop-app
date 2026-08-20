@@ -176,21 +176,22 @@ describe('ShellViewManager webview lifecycle', () => {
       agentPanelVisible: false,
     })
 
-    manager.sendAgentCommand('open-settings')
+    manager.sendAgentCommand('toggle-sidebar')
     const agent = createGuest(20, manager.getWebviewBootstrap().agentSrc)
     expect(manager.attachGuest(agent as any)).toBe(true)
-    expect(agent.send).not.toHaveBeenCalledWith('app-platform:agent-command-received', 'open-settings')
+    expect(agent.send).not.toHaveBeenCalledWith('app-platform:agent-command-received', 'toggle-sidebar')
 
     manager.markAgentRendererReady(20)
     expect(agent.send).toHaveBeenCalledWith(
       'app-platform:agent-navigation-intent-received',
       { type: 'conversation', sessionId: 'session-1' }
     )
-    expect(agent.send).toHaveBeenCalledWith('app-platform:agent-command-received', 'open-settings')
+    expect(agent.send).toHaveBeenCalledWith('app-platform:agent-command-received', 'toggle-sidebar')
 
-    manager.sendAgentCommand('open-shortcuts')
-    expect(agent.send).toHaveBeenCalledWith('app-platform:agent-command-received', 'open-shortcuts')
+    manager.sendAgentCommand('new-session')
+    expect(agent.send).toHaveBeenCalledWith('app-platform:agent-command-received', 'new-session')
 
+    agent.send.mockClear()
     agent.emit('did-start-navigation')
     manager.sendAgentCommand('new-session')
     expect(agent.send).not.toHaveBeenCalledWith('app-platform:agent-command-received', 'new-session')
@@ -224,6 +225,71 @@ describe('ShellViewManager webview lifecycle', () => {
       activeTarget: { kind: 'app', tabId },
       agentPanelVisible: false,
     })
+  })
+
+  it('opens one trusted Settings tab and remembers its last page', () => {
+    const manager = new ShellViewManager({
+      window: createWindow() as any,
+      workspaceId: 'ws-1',
+      initialActiveTarget: 'agent',
+      externalAppRegistry: createExternalAppRegistry() as any,
+      registerSurface: () => {},
+      unregisterSurface: () => {},
+    })
+
+    expect(manager.getInstalledApps()[0]).toMatchObject({
+      appId: 'settings',
+      kind: 'internal',
+      title: '设置',
+    })
+
+    manager.openSettings('appearance')
+    const first = manager.getState().tabs[0]
+    expect(first).toMatchObject({ appId: 'settings', kind: 'internal', status: 'loading' })
+    expect(first.entry).toContain('#appearance')
+    expect(manager.getState().activeTarget).toEqual({ kind: 'app', tabId: first.id })
+
+    manager.openSettings('shortcuts')
+    expect(manager.getState().tabs).toHaveLength(1)
+    expect(manager.getState().tabs[0].entry).toContain('#shortcuts')
+
+    const preferences: Record<string, unknown> = {}
+    const currentEntry = manager.getState().tabs[0].entry
+    expect(manager.authorizeGuest(currentEntry, preferences as any)).toBe(true)
+    expect(String(preferences.preload)).toContain('settings-preload.cjs')
+
+    const guest = createGuest(25, currentEntry)
+    expect(manager.attachGuest(guest as any)).toBe(true)
+    manager.markSettingsRendererReady(25)
+    expect(manager.getState().tabs[0].status).toBe('ready')
+    manager.openSettings('preferences')
+    expect(guest.send).toHaveBeenCalledWith('app-platform:settings-navigate', 'preferences')
+
+    manager.closeTab(first.id)
+    manager.openSettings()
+    expect(manager.getState().tabs[0].entry).toContain('#preferences')
+  })
+
+  it('updates Settings context when the Shell workspace changes', () => {
+    const manager = new ShellViewManager({
+      window: createWindow() as any,
+      workspaceId: 'ws-1',
+      initialActiveTarget: 'home',
+      externalAppRegistry: createExternalAppRegistry() as any,
+      registerSurface: () => {},
+      unregisterSurface: () => {},
+    })
+    manager.openSettings()
+    const tab = manager.getState().tabs[0]
+    const guest = createGuest(26, tab.entry)
+    expect(manager.attachGuest(guest as any)).toBe(true)
+
+    manager.updateWorkspace('ws-2')
+    expect(manager.getSettingsContext()).toEqual({ workspaceId: 'ws-2' })
+    expect(guest.send).toHaveBeenCalledWith(
+      'app-platform:settings-context-changed',
+      { workspaceId: 'ws-2' },
+    )
   })
 
   it('resolves Remote App lazily and authorizes its isolated webview', async () => {

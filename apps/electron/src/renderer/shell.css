@@ -323,6 +323,27 @@ html[data-resizing="true"] .app-region {
 
 @keyframes app-status-spin { to { transform: rotate(360deg); } }
 
+.settings-loading-splash {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+.settings-loading-symbol {
+  width: 32px;
+  height: 32px;
+  transform: scale(1.5);
+}
+
+.settings-loading-splash p {
+  margin: 0;
+  font-size: 13px;
+}
+
 .agent-surface {
   top: var(--app-region-inset);
   right: var(--panel-edge-inset);

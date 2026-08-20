@@ -116,11 +116,11 @@ function AppLogoMenu() {
               <SquarePenRounded className="h-3.5 w-3.5" />
               New Session
             </button>
-            <button role="menuitem" onClick={() => run(() => { void window.shellAPI.sendAgentCommand('open-settings') })}>
+            <button role="menuitem" onClick={() => run(() => { void window.shellAPI.openSettings() })}>
               <Settings className="h-3.5 w-3.5" />
               Settings
             </button>
-            <button role="menuitem" onClick={() => run(() => { void window.shellAPI.sendAgentCommand('open-shortcuts') })}>
+            <button role="menuitem" onClick={() => run(() => { void window.shellAPI.openSettings('shortcuts') })}>
               <Keyboard className="h-3.5 w-3.5" />
               Keyboard Shortcuts
             </button>
@@ -290,6 +290,8 @@ function Shell() {
             >
               {tab.iconUrl ? (
                 <img className="app-tab-icon" src={tab.iconUrl} alt="" />
+              ) : tab.kind === 'internal' ? (
+                <Settings className="app-tab-icon-placeholder" size={14} />
               ) : tab.kind === 'external' ? (
                 <AppWindow className="app-tab-icon-placeholder" size={14} />
               ) : null}
@@ -332,15 +334,29 @@ function Shell() {
                 ariaLabel="Home"
                 className={`surface-webview app-surface ${activeContentTabId === null ? 'surface-active' : ''}`}
               />
-              {state.tabs.filter(tab => tab.kind === 'built-in' || tab.status === 'ready').map(tab => (
+              {state.tabs.filter(tab => tab.kind === 'built-in' || tab.kind === 'internal' || tab.status === 'ready').map(tab => (
                 <SurfaceWebview
                   key={tab.id}
-                  src={tab.kind === 'external' ? tab.entry : appHostSources.tabs.get(tab.id)!}
-                  preload={tab.kind === 'external' ? bootstrap.externalAppPreload : bootstrap.appHostPreload}
+                  src={tab.kind === 'built-in' ? appHostSources.tabs.get(tab.id)! : tab.entry}
+                  preload={tab.kind === 'built-in'
+                    ? bootstrap.appHostPreload
+                    : tab.kind === 'internal' ? bootstrap.settingsPreload : bootstrap.externalAppPreload}
                   ariaLabel={tab.title}
                   partition={tab.partition}
                   className={`surface-webview app-surface ${activeContentTabId === tab.id ? 'surface-active' : ''}`}
                 />
+              ))}
+              {state.tabs.filter(tab => tab.kind === 'internal' && tab.status !== 'ready').map(tab => (
+                <div
+                  key={`status-${tab.id}`}
+                  className={`app-status-surface ${activeContentTabId === tab.id ? 'surface-active' : ''}`}
+                  aria-label={`${tab.title}正在加载`}
+                >
+                  <div className="settings-loading-splash">
+                    <CraftAgentsSymbol className="settings-loading-symbol text-accent" />
+                    <p>正在加载设置</p>
+                  </div>
+                </div>
               ))}
               {state.tabs.filter(tab => tab.kind === 'external' && tab.status !== 'ready').map(tab => (
                 <div

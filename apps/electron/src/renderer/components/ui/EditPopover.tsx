@@ -18,7 +18,7 @@ import { Button } from './button'
 import { cn } from '@/lib/utils'
 import { usePlatform } from '@craft-agent/ui'
 import type { ContentBadge, Session, CreateSessionOptions } from '../../../shared/types'
-import { useActiveWorkspace, useAppShellContext, useSession, usePendingPermission, usePendingCredential } from '@/context/AppShellContext'
+import { useActiveWorkspace, useOptionalAppShellContext, useSession, usePendingPermission, usePendingCredential } from '@/context/AppShellContext'
 import { useEscapeInterrupt } from '@/context/EscapeInterruptContext'
 import { ChatDisplay } from '../app-shell/ChatDisplay'
 
@@ -762,7 +762,7 @@ export function EditPopover({
   }
 
   // Use App context for session management (same code path as main chat)
-  const { onCreateSession, onSendMessage, onRespondToPermission, onRespondToCredential } = useAppShellContext()
+  const appShellContext = useOptionalAppShellContext()
 
   // Session ID for inline execution (created on first message)
   const [inlineSessionId, setInlineSessionId] = useState<string | null>(null)
@@ -957,6 +957,7 @@ export function EditPopover({
   // Handle sending message from ChatDisplay (inline mode)
   // Creates hidden session on first message, then uses App context for sending
   const handleInlineSendMessage = useCallback(async (message: string) => {
+    if (!appShellContext) throw new Error('Inline edit is unavailable outside Agent')
     const { prompt, badges } = buildEditPrompt(context, message, displayLabel)
 
     // Create session on first message
@@ -969,7 +970,7 @@ export function EditPopover({
         workingDirectory,
         hidden: true, // Hidden sessions use same App code path but don't appear in list
       }
-      const newSession = await onCreateSession(workspace.id, createOptions)
+      const newSession = await appShellContext.onCreateSession(workspace.id, createOptions)
       sessionId = newSession.id
       setInlineSessionId(sessionId)
     }
@@ -977,9 +978,9 @@ export function EditPopover({
     // Send message via App context (includes optimistic user message update)
     // Pass badges to hide the <edit_request> XML metadata in the user message bubble
     if (sessionId) {
-      onSendMessage(sessionId, prompt, undefined, undefined, badges)
+      appShellContext.onSendMessage(sessionId, prompt, undefined, undefined, badges)
     }
-  }, [context, displayLabel, inlineSessionId, workspace?.id, model, systemPromptPreset, permissionMode, workingDirectory, onCreateSession, onSendMessage])
+  }, [appShellContext, context, displayLabel, inlineSessionId, workspace?.id, model, systemPromptPreset, permissionMode, workingDirectory])
 
   // Legacy mode: navigates to chat in the same window
   const handleLegacySendMessage = useCallback((message: string) => {
@@ -1061,9 +1062,9 @@ export function EditPopover({
                   currentModel={currentModel}
                   onModelChange={setCurrentModel}
                   pendingPermission={pendingPermission}
-                  onRespondToPermission={onRespondToPermission}
+                  onRespondToPermission={appShellContext?.onRespondToPermission}
                   pendingCredential={pendingCredential}
-                  onRespondToCredential={onRespondToCredential}
+                  onRespondToCredential={appShellContext?.onRespondToCredential}
                   compactMode={true}
                   placeholder={placeholder}
                   emptyStateLabel={displayLabel || context.label}

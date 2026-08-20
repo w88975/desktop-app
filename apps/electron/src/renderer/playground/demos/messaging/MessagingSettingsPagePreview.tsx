@@ -9,7 +9,7 @@
 
 import * as React from 'react'
 import { useSetAtom } from 'jotai'
-import MessagingSettingsPage from '../../../pages/settings/MessagingSettingsPage'
+import MessagingSettingsPage from '../../../features/settings/pages/MessagingSettingsPage'
 import { setMessagingBindingsAtom, type MessagingBinding } from '../../../atoms/messaging'
 import { sessionMetaMapAtom, type SessionMeta } from '../../../atoms/sessions'
 import { playgroundMessagingHandle } from '../../mock-utils'

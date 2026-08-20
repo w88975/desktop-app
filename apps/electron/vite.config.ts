@@ -44,6 +44,7 @@ export default defineConfig({
         main: resolve(__dirname, 'src/renderer/index.html'),
         shell: resolve(__dirname, 'src/renderer/shell.html'),
         login: resolve(__dirname, 'src/renderer/login.html'),
+        settings: resolve(__dirname, 'src/renderer/settings.html'),
         'app-host': resolve(__dirname, 'src/renderer/app-host.html'),
         playground: resolve(__dirname, 'src/renderer/playground.html'),
         'browser-toolbar': resolve(__dirname, 'src/renderer/browser-toolbar.html'),

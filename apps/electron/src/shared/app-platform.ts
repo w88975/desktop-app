@@ -11,7 +11,7 @@ export type ActiveTarget =
   | { kind: 'agent' }
 
 export type AppInstancePolicy = 'single' | 'multiple'
-export type AppKind = 'built-in' | 'external'
+export type AppKind = 'built-in' | 'external' | 'internal'
 export type ExternalAppSourceType = 'builtin' | 'local' | 'remote'
 export type ExternalAppStatus = 'discovered' | 'loading' | 'ready' | 'error'
 
@@ -98,10 +98,12 @@ export interface WebviewSurfaceBootstrap {
   agentPreload: string
   appHostSrc: string
   appHostPreload: string
+  settingsSrc: string
+  settingsPreload: string
   externalAppPreload: string
 }
 
-export type AgentShellCommand = 'new-session' | 'open-settings' | 'open-shortcuts' | 'toggle-sidebar'
+export type AgentShellCommand = 'new-session' | 'toggle-sidebar'
 
 export type AgentNavigationIntent =
   | { type: 'conversation'; sessionId: string }
@@ -112,6 +114,7 @@ export const APP_PLATFORM_CHANNELS = {
   STATE_CHANGED: 'app-platform:state-changed',
   ACTIVATE_HOME: 'app-platform:activate-home',
   OPEN_APP: 'app-platform:open-app',
+  OPEN_SETTINGS: 'app-platform:open-settings',
   ACTIVATE_TAB: 'app-platform:activate-tab',
   CLOSE_TAB: 'app-platform:close-tab',
   TOGGLE_AGENT_PANEL: 'app-platform:toggle-agent-panel',
@@ -132,6 +135,12 @@ export const APP_PLATFORM_CHANNELS = {
   EXTERNAL_GET_APP_NAME: 'app-platform:external-get-app-name',
   EXTERNAL_GET_APP_VERSION: 'app-platform:external-get-app-version',
   EXTERNAL_OPEN_AGENT_PANEL: 'app-platform:external-open-agent-panel',
+  SETTINGS_GET_CONTEXT: 'app-platform:settings-get-context',
+  SETTINGS_CONTEXT_CHANGED: 'app-platform:settings-context-changed',
+  SETTINGS_NAVIGATE: 'app-platform:settings-navigate',
+  SETTINGS_SET_SUBPAGE: 'app-platform:settings-set-subpage',
+  SETTINGS_RENDERER_READY: 'app-platform:settings-renderer-ready',
+  SETTINGS_OPEN_AGENT_CONVERSATION: 'app-platform:settings-open-agent-conversation',
 } as const
 
 export interface ShellAPI {
@@ -139,6 +148,7 @@ export interface ShellAPI {
   getWebviewBootstrap(): Promise<WebviewSurfaceBootstrap>
   activateHome(): Promise<void>
   openApp(appId: string): Promise<void>
+  openSettings(subpage?: string): Promise<void>
   activateTab(tabId: string): Promise<void>
   closeTab(tabId: string): Promise<void>
   focusAgentTab(intent?: AgentNavigationIntent): Promise<void>
@@ -163,6 +173,19 @@ export interface HxsyAppBridge {
   getAppName(): Promise<string>
   getAppVersion(): Promise<string>
   openAgentPanel(): Promise<void>
+}
+
+export interface SettingsAppContext {
+  workspaceId: string
+}
+
+export interface SettingsAppAPI {
+  getContext(): Promise<SettingsAppContext>
+  setActiveSubpage(subpage: string): Promise<void>
+  notifyReady(): Promise<void>
+  openAgentConversation(sessionId: string): Promise<void>
+  onContextChanged(callback: (context: SettingsAppContext) => void): () => void
+  onNavigate(callback: (subpage: string) => void): () => void
 }
 
 export type SurfaceKind = 'shell' | 'agent' | 'home' | 'app'
@@ -216,5 +239,6 @@ declare global {
     shellAPI: ShellAPI
     appHostAPI: AppHostAPI
     hxsyApp: HxsyAppBridge
+    settingsAppAPI: SettingsAppAPI
   }
 }
