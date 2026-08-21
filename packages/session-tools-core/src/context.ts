@@ -372,6 +372,19 @@ export interface SessionToolContext {
   appBrowser?(appId: string, command: string | string[]): Promise<unknown>;
 
   // ============================================================
+  // Main App Shell Tools
+  // ============================================================
+
+  /** List Home, Agent, and currently open App tabs in the main desktop shell. */
+  listMainAppTabs?(): Promise<MainAppTabsResult>;
+
+  /** Switch the main shell to Home, Agent, or an open App tab. */
+  switchMainAppTab?(target: string): Promise<MainAppTabActionResult>;
+
+  /** Close an open App tab. Home and Agent are persistent and not closable. */
+  closeMainAppTab?(target: string): Promise<MainAppTabActionResult>;
+
+  // ============================================================
   // Inter-Session Messaging
   // ============================================================
 
@@ -529,6 +542,29 @@ export interface AppTabActionResult {
   appId: string;
   tabId?: string;
   status: 'opened' | 'activated' | 'closed' | 'not-open';
+}
+
+export interface MainAppTabInfo {
+  target: string;
+  kind: 'home' | 'agent' | 'app';
+  title: string;
+  active: boolean;
+  closable: boolean;
+  tabId?: string;
+  appId?: string;
+  status?: string;
+}
+
+export interface MainAppTabsResult {
+  activeTarget: string;
+  tabs: MainAppTabInfo[];
+}
+
+export interface MainAppTabActionResult {
+  action: 'switched' | 'closed';
+  target: string;
+  tab: MainAppTabInfo;
+  state: MainAppTabsResult;
 }
 
 export interface SessionInfo {

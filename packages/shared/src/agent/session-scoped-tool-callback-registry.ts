@@ -15,6 +15,7 @@ import type { SpawnSessionFn } from './spawn-session-tool.ts';
 import type { BrowserPaneFns } from './browser-tools.ts';
 import type { AuthRequest } from '@craft-agent/session-tools-core';
 import type { AppCatalogItem, AppTabActionResult } from '@craft-agent/session-tools-core';
+import type { MainAppTabsResult, MainAppTabActionResult } from '@craft-agent/session-tools-core';
 import { debug } from '../utils/debug.ts';
 
 /**
@@ -91,6 +92,9 @@ export interface SessionScopedToolCallbacks {
 
   /** Desktop-host app catalog, tab lifecycle, and WebTool invocation bridge. */
   appControllerFns?: AppControllerFns;
+
+  /** Main desktop shell tab discovery and lifecycle controls. */
+  mainAppToolsFns?: MainAppToolsFns;
 }
 
 export interface AppControllerFns {
@@ -99,6 +103,12 @@ export interface AppControllerFns {
   closeApp(appId: string): Promise<AppTabActionResult>;
   callWebTool(appId: string, functionName: string, args: Record<string, unknown>): Promise<unknown>;
   appBrowser(appId: string, command: string | string[]): Promise<unknown>;
+}
+
+export interface MainAppToolsFns {
+  listTabs(): Promise<MainAppTabsResult>;
+  switchTab(target: string): Promise<MainAppTabActionResult>;
+  closeTab(target: string): Promise<MainAppTabActionResult>;
 }
 
 // Registry of callbacks keyed by sessionId

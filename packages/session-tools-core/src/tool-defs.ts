@@ -44,6 +44,7 @@ import { handleArchiveSession } from './handlers/archive-session.ts';
 import { handleSendAgentMessage } from './handlers/send-agent-message.ts';
 import { handleListMessagingChannels, handleUnbindMessagingChannel } from './handlers/messaging.ts';
 import { handleListApps, handleOpenApp, handleCloseApp, handleCallWebTool, handleAppBrowser } from './handlers/apps.ts';
+import { handleMainAppListTabs, handleMainAppSwitchTab, handleMainAppCloseTab } from './handlers/main-app-tools.ts';
 
 // ============================================================
 // Canonical Zod Schemas
@@ -268,6 +269,16 @@ export const AppBrowserSchema = z.object({
   command: z.union([z.string(), z.array(z.string())]).describe(
     'Browser-style command. Prefer array form when arguments contain spaces, quotes, or source code.'
   ),
+});
+
+export const MainAppListTabsSchema = z.object({});
+
+export const MainAppSwitchTabSchema = z.object({
+  target: z.string().describe('Target from main_app_list_tabs: "home", "agent", or an App tabId'),
+});
+
+export const MainAppCloseTabSchema = z.object({
+  target: z.string().describe('Closable App tabId from main_app_list_tabs'),
 });
 
 // ============================================================
@@ -592,6 +603,18 @@ Commands:
 - title | url | back | forward | reload
 
 Refs belong to the latest snapshot for that App renderer. Re-snapshot after navigation or major DOM updates. Prefer semantic refs over coordinates.`,
+
+  main_app_list_tabs: `List tabs in the current main desktop App window.
+
+Returns persistent Home and Agent targets plus every open App tab. Each item includes target, kind, title, active, closable, and App metadata when applicable. Use this before switching or closing when the target is uncertain.`,
+
+  main_app_switch_tab: `Switch the current main desktop App window to Home, Agent, or an open App tab.
+
+Pass target="home", target="agent", or an exact App tabId returned by main_app_list_tabs. Switching to Agent focuses its full tab presentation; switching to an App activates its existing tab without reloading it.`,
+
+  main_app_close_tab: `Close an open App tab in the current main desktop App window.
+
+Pass an exact closable App tabId returned by main_app_list_tabs. Home and Agent are persistent shell surfaces and cannot be closed. Closing destroys that App renderer and rejects pending WebTool/app_browser work for it.`,
 } as const;
 
 // ============================================================
@@ -676,6 +699,10 @@ export const SESSION_TOOL_DEFS: SessionToolDef[] = [
   { name: 'close_app', description: TOOL_DESCRIPTIONS.close_app, inputSchema: CloseAppSchema, executionMode: 'registry', safeMode: 'block', handler: handleCloseApp },
   { name: 'call_webtool', description: TOOL_DESCRIPTIONS.call_webtool, inputSchema: CallWebToolSchema, executionMode: 'registry', safeMode: 'block', handler: handleCallWebTool },
   { name: 'app_browser', description: TOOL_DESCRIPTIONS.app_browser, inputSchema: AppBrowserSchema, executionMode: 'registry', safeMode: 'block', handler: handleAppBrowser },
+  // Main desktop shell tab controls (grouped in handlers/main-app-tools.ts)
+  { name: 'main_app_list_tabs', description: TOOL_DESCRIPTIONS.main_app_list_tabs, inputSchema: MainAppListTabsSchema, executionMode: 'registry', safeMode: 'allow', readOnly: true, handler: handleMainAppListTabs },
+  { name: 'main_app_switch_tab', description: TOOL_DESCRIPTIONS.main_app_switch_tab, inputSchema: MainAppSwitchTabSchema, executionMode: 'registry', safeMode: 'allow', handler: handleMainAppSwitchTab },
+  { name: 'main_app_close_tab', description: TOOL_DESCRIPTIONS.main_app_close_tab, inputSchema: MainAppCloseTabSchema, executionMode: 'registry', safeMode: 'block', handler: handleMainAppCloseTab },
 ];
 
 export interface SessionToolFilterOptions {

@@ -181,6 +181,30 @@ export function attachSessionSelfManagementBindings(
     enumerable: true,
   });
 
+  Object.defineProperty(context, 'listMainAppTabs', {
+    get() {
+      return getSessionScopedToolCallbacks(sessionId)?.mainAppToolsFns?.listTabs;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(context, 'switchMainAppTab', {
+    get() {
+      return getSessionScopedToolCallbacks(sessionId)?.mainAppToolsFns?.switchTab;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(context, 'closeMainAppTab', {
+    get() {
+      return getSessionScopedToolCallbacks(sessionId)?.mainAppToolsFns?.closeTab;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+
   // getSessionInfo needs wrapping to default sid → sessionId
   Object.defineProperty(context, 'getSessionInfo', {
     get() {

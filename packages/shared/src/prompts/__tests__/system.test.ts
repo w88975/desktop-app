@@ -60,6 +60,15 @@ describe('system prompt guidance', () => {
     expect(prompt).toContain('The subtask needs file/shell tools (for example, Read or Bash)')
     expect(prompt).not.toContain('The subtask needs tools (Read, Bash, Grep)')
   })
+
+  it('documents grouped main App tab tools and tabId targeting', () => {
+    const prompt = getSystemPrompt(undefined, undefined, '/tmp/workspace', '/tmp/workspace')
+    expect(prompt).toContain('## Main App Tools')
+    expect(prompt).toContain('`main_app_list_tabs`')
+    expect(prompt).toContain('`main_app_switch_tab`')
+    expect(prompt).toContain('`main_app_close_tab`')
+    expect(prompt).toContain("Do not confuse an App's `appId` with its runtime `tabId`")
+  })
 })
 
 describe('includeCoAuthoredBy handling', () => {

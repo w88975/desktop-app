@@ -132,6 +132,11 @@ interface SessionRuntimeHooks {
     callWebTool: (workspaceId: string, appId: string, functionName: string, args: Record<string, unknown>) => Promise<unknown>
     appBrowser: (workspaceId: string, appId: string, command: string | string[]) => Promise<unknown>
   }
+  mainAppTools?: {
+    listTabs: (workspaceId: string) => Promise<import('@craft-agent/session-tools-core').MainAppTabsResult>
+    switchTab: (workspaceId: string, target: string) => Promise<import('@craft-agent/session-tools-core').MainAppTabActionResult>
+    closeTab: (workspaceId: string, target: string) => Promise<import('@craft-agent/session-tools-core').MainAppTabActionResult>
+  }
 }
 
 const defaultSessionRuntimeHooks: SessionRuntimeHooks = {
@@ -4294,6 +4299,13 @@ export class SessionManager implements ISessionManager {
               sessionRuntimeHooks.appController!.callWebTool(managed.workspace.id, appId, functionName, args),
             appBrowser: (appId: string, command: string | string[]) =>
               sessionRuntimeHooks.appController!.appBrowser(managed.workspace.id, appId, command),
+          },
+        } : {}),
+        ...(sessionRuntimeHooks.mainAppTools ? {
+          mainAppToolsFns: {
+            listTabs: () => sessionRuntimeHooks.mainAppTools!.listTabs(managed.workspace.id),
+            switchTab: (target: string) => sessionRuntimeHooks.mainAppTools!.switchTab(managed.workspace.id, target),
+            closeTab: (target: string) => sessionRuntimeHooks.mainAppTools!.closeTab(managed.workspace.id, target),
           },
         } : {}),
         setSessionLabelsFn: async (sessionId: string | undefined, labels: string[]) => {

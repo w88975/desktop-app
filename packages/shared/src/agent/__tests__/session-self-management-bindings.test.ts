@@ -230,12 +230,28 @@ describe('attachSessionSelfManagementBindings', () => {
         callWebTool: async (_appId, _functionName, args) => ({ echoed: args }),
         appBrowser: async (_appId, command) => ({ command }),
       },
+      mainAppToolsFns: {
+        listTabs: async () => ({ activeTarget: 'agent', tabs: [] }),
+        switchTab: async target => ({
+          action: 'switched', target,
+          tab: { target: 'agent', kind: 'agent', title: 'Agent', active: true, closable: false },
+          state: { activeTarget: 'agent', tabs: [] },
+        }),
+        closeTab: async target => ({
+          action: 'closed', target,
+          tab: { target, kind: 'app', title: 'App', active: false, closable: true, tabId: target },
+          state: { activeTarget: 'home', tabs: [] },
+        }),
+      },
     });
 
     expect((await ctx.listApps!())[0]?.appId).toBe('todo');
     expect(await ctx.openApp!('todo')).toMatchObject({ status: 'opened' });
     expect(await ctx.callWebTool!('todo', 'echo', { value: 1 })).toEqual({ echoed: { value: 1 } });
     expect(await ctx.appBrowser!('todo', 'snapshot')).toEqual({ command: 'snapshot' });
+    expect((await ctx.listMainAppTabs!()).activeTarget).toBe('agent');
+    expect((await ctx.switchMainAppTab!('agent')).action).toBe('switched');
+    expect((await ctx.closeMainAppTab!('tab-1')).action).toBe('closed');
     expect(await ctx.closeApp!('todo')).toMatchObject({ status: 'closed' });
   });
 });

@@ -15,7 +15,9 @@ import { ShellViewManager } from './shell-view-manager'
 import type { ExternalAppRegistry } from './external-app-registry'
 import { buildInstalledAppSummaries } from './internal-app-registry'
 import type { AppCatalogItem, AppTabActionResult } from '@craft-agent/session-tools-core'
+import type { MainAppTabsResult, MainAppTabActionResult } from '@craft-agent/session-tools-core'
 import { isSettingsShortcut } from './settings-shortcut'
+import { listMainAppTabs, switchMainAppTab, closeMainAppTab } from './main-app-tools'
 
 // Vite dev server URL for hot reload
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
@@ -135,6 +137,34 @@ export class WindowManager {
     const manager = this.shellViews.get(window.webContents.id)
     if (!manager) throw new Error(`App shell unavailable for workspace ${workspaceId}`)
     return manager.appBrowser(appId, command)
+  }
+
+  async listMainAppTabsForAgent(workspaceId: string): Promise<MainAppTabsResult> {
+    const manager = this.getMainAppToolsHost(workspaceId)
+    return listMainAppTabs(manager)
+  }
+
+  async switchMainAppTabForAgent(workspaceId: string, target: string): Promise<MainAppTabActionResult> {
+    const window = this.getPreferredWindowForWorkspace(workspaceId)
+    if (!window) throw new Error(`No desktop window is open for workspace ${workspaceId}`)
+    const manager = this.shellViews.get(window.webContents.id)
+    if (!manager) throw new Error(`Main App shell unavailable for workspace ${workspaceId}`)
+    const result = switchMainAppTab(manager, target)
+    if (window.isMinimized()) window.restore()
+    window.focus()
+    return result
+  }
+
+  async closeMainAppTabForAgent(workspaceId: string, target: string): Promise<MainAppTabActionResult> {
+    return closeMainAppTab(this.getMainAppToolsHost(workspaceId), target)
+  }
+
+  private getMainAppToolsHost(workspaceId: string): ShellViewManager {
+    const window = this.getPreferredWindowForWorkspace(workspaceId)
+    if (!window) throw new Error(`No desktop window is open for workspace ${workspaceId}`)
+    const manager = this.shellViews.get(window.webContents.id)
+    if (!manager) throw new Error(`Main App shell unavailable for workspace ${workspaceId}`)
+    return manager
   }
 
   private getPreferredWindowForWorkspace(workspaceId: string): BrowserWindow | null {

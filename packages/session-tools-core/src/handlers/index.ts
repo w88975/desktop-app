@@ -82,3 +82,7 @@ export type { ArchiveSessionArgs } from './archive-session.ts';
 // Main App Control
 export { handleListApps, handleOpenApp, handleCloseApp, handleCallWebTool, handleAppBrowser } from './apps.ts';
 export type { ListAppsArgs, OpenAppArgs, CloseAppArgs, CallWebToolArgs, AppBrowserArgs } from './apps.ts';
+
+// Main App Shell Tools
+export { handleMainAppListTabs, handleMainAppSwitchTab, handleMainAppCloseTab } from './main-app-tools.ts';
+export type { MainAppListTabsArgs, MainAppSwitchTabArgs, MainAppCloseTabArgs } from './main-app-tools.ts';

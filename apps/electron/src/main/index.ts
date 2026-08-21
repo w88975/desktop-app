@@ -872,6 +872,11 @@ app.whenReady().then(async () => {
               appBrowser: (workspaceId, appId, command) =>
                 windowManager!.appBrowserForAgent(workspaceId, appId, command),
             },
+            mainAppTools: {
+              listTabs: (workspaceId) => windowManager!.listMainAppTabsForAgent(workspaceId),
+              switchTab: (workspaceId, target) => windowManager!.switchMainAppTabForAgent(workspaceId, target),
+              closeTab: (workspaceId, target) => windowManager!.closeMainAppTabForAgent(workspaceId, target),
+            },
             captureException: (error, context) => {
               Sentry.captureException(error instanceof Error ? error : new Error(String(error)), {
                 tags: {

@@ -139,6 +139,9 @@ export type {
   AppCatalogFunction,
   AppCatalogItem,
   AppTabActionResult,
+  MainAppTabInfo,
+  MainAppTabsResult,
+  MainAppTabActionResult,
 } from './context.ts';
 
 export { createNodeFileSystem } from './context.ts';
@@ -177,6 +180,9 @@ export {
   handleCloseApp,
   handleCallWebTool,
   handleAppBrowser,
+  handleMainAppListTabs,
+  handleMainAppSwitchTab,
+  handleMainAppCloseTab,
 } from './handlers/index.ts';
 
 export type {
@@ -200,6 +206,9 @@ export type {
   CloseAppArgs,
   CallWebToolArgs,
   AppBrowserArgs,
+  MainAppListTabsArgs,
+  MainAppSwitchTabArgs,
+  MainAppCloseTabArgs,
 } from './handlers/index.ts';
 
 // Tool definitions — single source of truth
@@ -226,6 +235,9 @@ export {
   CloseAppSchema,
   CallWebToolSchema,
   AppBrowserSchema,
+  MainAppListTabsSchema,
+  MainAppSwitchTabSchema,
+  MainAppCloseTabSchema,
   // Descriptions
   TOOL_DESCRIPTIONS,
   // Registry

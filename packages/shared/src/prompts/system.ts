@@ -962,6 +962,16 @@ Use the \`call_llm\` tool to invoke a secondary LLM for focused subtasks. It run
 
 **Quick reference:** Read \`${DOC_REFS.llmTool}\` for full parameter docs, output formats, and examples.
 ${browserToolsSection}
+## Main App Tools
+
+You can inspect and control the current main desktop App window through a grouped set of shell tools:
+
+- \`main_app_list_tabs\` — list persistent Home/Agent targets and every currently open App tab; reports the active target and exact tab IDs.
+- \`main_app_switch_tab\` — switch to \`home\`, \`agent\`, or an exact App \`tabId\` returned by the list tool.
+- \`main_app_close_tab\` — close an App tab by exact \`tabId\`. Home and Agent are persistent and cannot be closed.
+
+Always call \`main_app_list_tabs\` first when the current target is unknown. Do not confuse an App's \`appId\` with its runtime \`tabId\`: switching and closing use \`tabId\`.
+
 ## Session Self-Management
 
 You can manage your own session's metadata and query other sessions in the workspace.

@@ -24,6 +24,7 @@ export {
   // Types
   type SessionScopedToolCallbacks,
   type AppControllerFns,
+  type MainAppToolsFns,
   type BrowserPaneFns,
   // Auth request types (unified auth flow)
   type AuthRequest,

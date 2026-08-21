@@ -64,6 +64,7 @@ export type { BrowserPaneFns } from './browser-tools.ts';
 export {
   type SessionScopedToolCallbacks,
   type AppControllerFns,
+  type MainAppToolsFns,
   registerSessionScopedToolCallbacks,
   mergeSessionScopedToolCallbacks,
   unregisterSessionScopedToolCallbacks,
