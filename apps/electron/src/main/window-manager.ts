@@ -125,6 +125,18 @@ export class WindowManager {
     return manager.callWebTool(appId, functionName, args)
   }
 
+  async appBrowserForAgent(
+    workspaceId: string,
+    appId: string,
+    command: string | string[],
+  ): Promise<unknown> {
+    const window = this.getPreferredWindowForWorkspace(workspaceId)
+    if (!window) throw new Error(`No desktop window is open for workspace ${workspaceId}`)
+    const manager = this.shellViews.get(window.webContents.id)
+    if (!manager) throw new Error(`App shell unavailable for workspace ${workspaceId}`)
+    return manager.appBrowser(appId, command)
+  }
+
   private getPreferredWindowForWorkspace(workspaceId: string): BrowserWindow | null {
     const focused = this.getFocusedWindow()
     if (focused && this.getWorkspaceForWindow(focused.webContents.id) === workspaceId) return focused

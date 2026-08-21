@@ -13,6 +13,23 @@ mock.module('electron', () => ({
 mock.module('../logger', () => ({
   windowLog: { info: mock(() => {}), warn: mock(() => {}), error: mock(() => {}) },
 }))
+mock.module('../browser-cdp', () => ({
+  BrowserCDP: class MockBrowserCDP {
+    getAccessibilitySnapshot = mock(async () => ({
+      url: 'hxsy-app://todo-placeholder/index.html',
+      title: 'TODO',
+      nodes: [{ ref: '@e1', role: 'button', name: '创建' }],
+    }))
+    clickElement = mock(async (ref: string) => ({ ref, box: { x: 1, y: 2, width: 30, height: 20 }, clickPoint: { x: 16, y: 12 } }))
+    clickAtCoordinates = mock(async () => {})
+    fillElement = mock(async (ref: string) => ({ ref, box: { x: 1, y: 2, width: 30, height: 20 }, clickPoint: { x: 16, y: 12 } }))
+    typeText = mock(async () => {})
+    selectOption = mock(async (ref: string) => ({ ref, box: { x: 1, y: 2, width: 30, height: 20 }, clickPoint: { x: 16, y: 12 } }))
+    getElementGeometry = mock(async (ref: string) => ({ ref, box: { x: 1, y: 2, width: 30, height: 20 }, clickPoint: ref === '@e1' ? { x: 16, y: 12 } : { x: 80, y: 90 } }))
+    drag = mock(async () => {})
+    detach = mock(() => {})
+  },
+}))
 
 const { ShellViewManager } = await import('../shell-view-manager')
 
@@ -115,6 +132,23 @@ function createGuest(id: number, url: string) {
     on: (event: string, callback: Function) => listeners.set(event, [...(listeners.get(event) ?? []), callback]),
     once: (event: string, callback: Function) => listeners.set(event, [...(listeners.get(event) ?? []), callback]),
     send: mock((..._args: unknown[]) => {}),
+    executeJavaScript: mock(async (expression: string) => {
+      if (expression.includes('outerHTML')) return { html: '<main><button>创建</button></main>', truncated: false, totalCharacters: 35 }
+      if (expression.includes('innerText')) return { text: '创建', truncated: false, totalCharacters: 2 }
+      if (expression.includes('window.scrollBy')) return { scrollX: 0, scrollY: 500 }
+      if (expression.includes('__hxsyAppBrowserOk')) {
+        if (expression.includes('boom')) {
+          return { __hxsyAppBrowserOk: false, error: 'boom', stack: 'Error: boom\n at app.js:1' }
+        }
+        return { __hxsyAppBrowserOk: true, value: { evaluated: true } }
+      }
+      return { evaluated: expression }
+    }),
+    getTitle: () => 'TODO',
+    sendInputEvent: mock(() => {}),
+    goBack: mock(() => {}),
+    goForward: mock(() => {}),
+    reload: mock(() => {}),
     close: mock(() => {
       if (destroyed) return
       destroyed = true
@@ -251,6 +285,54 @@ describe('ShellViewManager webview lifecycle', () => {
     expect(manager.closeApp('todo-placeholder').status).toBe('closed')
     expect((manager as any).webToolRegistrationWaiters.size).toBe(0)
     expect((await rejection).message).toContain('App closed before WebTool registered')
+  })
+
+  it('inspects and simulates interaction inside an App WebView with snapshot refs', async () => {
+    const manager = new ShellViewManager({
+      window: createWindow() as any,
+      workspaceId: 'ws-1',
+      initialActiveTarget: 'home',
+      externalAppRegistry: createExternalAppRegistry() as any,
+      registerSurface: () => {},
+      unregisterSurface: () => {},
+    })
+    manager.openApp('todo-placeholder')
+    const tab = manager.getState().tabs[0]
+    const guest = createGuest(42, tab.entry)
+    expect(manager.attachGuest(guest as any)).toBe(true)
+
+    expect(await manager.appBrowser('todo-placeholder', 'source')).toMatchObject({
+      command: 'source',
+      result: { html: expect.stringContaining('<button>') },
+    })
+    expect(await manager.appBrowser('todo-placeholder', 'snapshot')).toMatchObject({
+      command: 'snapshot',
+      result: { nodes: [{ ref: '@e1', role: 'button', name: '创建' }] },
+    })
+    expect(await manager.appBrowser('todo-placeholder', ['click', '@e1'])).toMatchObject({ command: 'click' })
+    expect(await manager.appBrowser('todo-placeholder', ['fill', '@e1', '发布桌面端'])).toMatchObject({ command: 'fill' })
+    expect(await manager.appBrowser('todo-placeholder', ['scroll', 'down', '500'])).toMatchObject({
+      result: { scrollY: 500 },
+    })
+    expect(await manager.appBrowser('todo-placeholder', ['drag', '@e1', '@e2'])).toMatchObject({ command: 'drag' })
+    expect(await manager.appBrowser('todo-placeholder', ['key', 'Enter', 'meta'])).toMatchObject({ command: 'key' })
+    expect(guest.sendInputEvent).toHaveBeenCalledTimes(2)
+
+    expect(await manager.appBrowser('todo-placeholder', '[evaluate, ({a: 1, b: 2})]')).toMatchObject({
+      command: 'evaluate',
+      result: { evaluated: true },
+    })
+    expect(await manager.appBrowser(
+      'todo-placeholder',
+      'evaluate document.getElementById("todo-title").value',
+    )).toMatchObject({ command: 'evaluate', result: { evaluated: true } })
+    const evaluateScript = guest.executeJavaScript.mock.calls.at(-1)?.[0] as string
+    expect(evaluateScript).toContain('getElementById(\\"todo-title\\")')
+    expect(evaluateScript).not.toContain('getElementById(todo-title)')
+    await expect(manager.appBrowser(
+      'todo-placeholder',
+      '["evaluate", "(() => { throw new Error(\\"boom\\") })()"]',
+    )).rejects.toThrow('Renderer evaluate failed: boom')
   })
 
   it('uses explicit Agent focus and queues commands/intents until renderer is ready', () => {

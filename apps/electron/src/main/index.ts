@@ -869,6 +869,8 @@ app.whenReady().then(async () => {
               closeApp: (workspaceId, appId) => windowManager!.closeAppForAgent(workspaceId, appId),
               callWebTool: (workspaceId, appId, functionName, args) =>
                 windowManager!.callWebToolForAgent(workspaceId, appId, functionName, args),
+              appBrowser: (workspaceId, appId, command) =>
+                windowManager!.appBrowserForAgent(workspaceId, appId, command),
             },
             captureException: (error, context) => {
               Sentry.captureException(error instanceof Error ? error : new Error(String(error)), {

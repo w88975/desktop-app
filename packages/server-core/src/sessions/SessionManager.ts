@@ -130,6 +130,7 @@ interface SessionRuntimeHooks {
     openApp: (workspaceId: string, appId: string) => Promise<import('@craft-agent/session-tools-core').AppTabActionResult>
     closeApp: (workspaceId: string, appId: string) => Promise<import('@craft-agent/session-tools-core').AppTabActionResult>
     callWebTool: (workspaceId: string, appId: string, functionName: string, args: Record<string, unknown>) => Promise<unknown>
+    appBrowser: (workspaceId: string, appId: string, command: string | string[]) => Promise<unknown>
   }
 }
 
@@ -4291,6 +4292,8 @@ export class SessionManager implements ISessionManager {
             closeApp: (appId: string) => sessionRuntimeHooks.appController!.closeApp(managed.workspace.id, appId),
             callWebTool: (appId: string, functionName: string, args: Record<string, unknown>) =>
               sessionRuntimeHooks.appController!.callWebTool(managed.workspace.id, appId, functionName, args),
+            appBrowser: (appId: string, command: string | string[]) =>
+              sessionRuntimeHooks.appController!.appBrowser(managed.workspace.id, appId, command),
           },
         } : {}),
         setSessionLabelsFn: async (sessionId: string | undefined, labels: string[]) => {

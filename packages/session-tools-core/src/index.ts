@@ -176,6 +176,7 @@ export {
   handleOpenApp,
   handleCloseApp,
   handleCallWebTool,
+  handleAppBrowser,
 } from './handlers/index.ts';
 
 export type {
@@ -198,6 +199,7 @@ export type {
   OpenAppArgs,
   CloseAppArgs,
   CallWebToolArgs,
+  AppBrowserArgs,
 } from './handlers/index.ts';
 
 // Tool definitions — single source of truth
@@ -223,6 +225,7 @@ export {
   OpenAppSchema,
   CloseAppSchema,
   CallWebToolSchema,
+  AppBrowserSchema,
   // Descriptions
   TOOL_DESCRIPTIONS,
   // Registry

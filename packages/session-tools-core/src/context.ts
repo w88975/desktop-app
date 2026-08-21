@@ -368,6 +368,9 @@ export interface SessionToolContext {
     args: Record<string, unknown>,
   ): Promise<unknown>;
 
+  /** Inspect and simulate user interaction inside an open App WebView. */
+  appBrowser?(appId: string, command: string | string[]): Promise<unknown>;
+
   // ============================================================
   // Inter-Session Messaging
   // ============================================================

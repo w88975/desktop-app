@@ -173,6 +173,14 @@ export function attachSessionSelfManagementBindings(
     enumerable: true,
   });
 
+  Object.defineProperty(context, 'appBrowser', {
+    get() {
+      return getSessionScopedToolCallbacks(sessionId)?.appControllerFns?.appBrowser;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+
   // getSessionInfo needs wrapping to default sid → sessionId
   Object.defineProperty(context, 'getSessionInfo', {
     get() {

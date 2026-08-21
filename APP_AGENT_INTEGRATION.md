@@ -12,6 +12,7 @@ App 目录/远程地址
 → Agent 使用 list_apps 发现 App
 → Agent 使用 open_app 打开/激活 App tab
 → Agent 使用 call_webtool 调用公开函数
+→ Agent 可使用 app_browser 检查 DOM 并模拟用户操作
 → App handler 执行并返回结果
 → 结果传回 Agent
 → Agent 按需使用 close_app 关闭 App
@@ -334,6 +335,61 @@ list_apps（可选；用于实时发现）
 | renderer closed/navigated/stopped | App 被关闭、跳转或崩溃 | 重新打开；确认操作是否已部分完成再决定重试 |
 | `result exceeded 1MB` | 返回值太大 | 修改 App，仅返回摘要/ID/分页数据 |
 
+## 8.1 WebView 检查与模拟操作
+
+当 manifest 没有合适 WebTool，或任务需要按真实 UI 流程操作时，使用 `app_browser`：
+
+```text
+open_app
+→ app_browser snapshot
+→ app_browser click/fill/scroll/drag...
+→ app_browser snapshot
+```
+
+示例：
+
+```json
+{
+  "appId": "todo-placeholder",
+  "command": "snapshot"
+}
+```
+
+```json
+{
+  "appId": "todo-placeholder",
+  "command": ["fill", "@e2", "发布桌面端"]
+}
+```
+
+```json
+{
+  "appId": "todo-placeholder",
+  "command": ["click", "@e3"]
+}
+```
+
+支持命令：
+
+- `source [selector]`：读取当前渲染 DOM HTML；最多 200,000 字符。
+- `snapshot`：读取 accessibility tree，生成 `@eN` refs。
+- `click <ref>`、`click-at <x> <y>`。
+- `fill <ref> <value>`、`type <text>`、`select <ref> <value>`。
+- `scroll <direction> [amount]`。
+- `drag <sourceRef> <targetRef>` 或 `drag <x1> <y1> <x2> <y2>`。
+- `key <key> [modifiers...]`。
+- `text [selector]`、`evaluate <expression>`。
+- `title`、`url`、`back`、`forward`、`reload`。
+
+规则：
+
+- 每个 App WebView 有独立 CDP controller 与 ref map。
+- ref 只属于生成它的 App renderer。
+- 导航、reload、大幅 DOM 更新后重新 `snapshot`。
+- 优先 semantic ref，坐标仅用于 canvas/无语义元素。
+- `source` 返回当前渲染 HTML，不等同于服务器原始源码或完整 JS bundle。
+- `app_browser` 能触发真实 UI 副作用；按写操作对待。
+
 涉及创建、删除、支付、发送等非幂等操作时，超时后禁止无条件重试。先通过只读 WebTool 查询实际状态。
 
 ## 9. 权限与安全边界
@@ -365,6 +421,8 @@ list_apps（可选；用于实时发现）
 - [ ] `list_apps` 能发现 App 与函数
 - [ ] `open_app` 创建或激活正确 tab
 - [ ] `call_webtool` 更新 UI/状态并返回结果
+- [ ] `app_browser source`、`snapshot` 可读取当前页面
+- [ ] `app_browser click/fill/scroll/drag` 能驱动 App UI
 - [ ] 参数错误、未注册 handler、关闭 renderer 均返回明确错误
 - [ ] `close_app` 正常销毁 tab
 

@@ -10,6 +10,10 @@ export interface CallWebToolArgs {
   functionName: string;
   arguments?: Record<string, unknown>;
 }
+export interface AppBrowserArgs {
+  appId: string;
+  command: string | string[];
+}
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -57,5 +61,17 @@ export async function handleCallWebTool(ctx: SessionToolContext, args: CallWebTo
     };
   } catch (error) {
     return errorResponse(`WebTool call failed: ${message(error)}`);
+  }
+}
+
+export async function handleAppBrowser(ctx: SessionToolContext, args: AppBrowserArgs): Promise<ToolResult> {
+  if (!ctx.appBrowser) return errorResponse('app_browser is unavailable. Open this workspace in the desktop app.');
+  try {
+    const result = await ctx.appBrowser(args.appId, args.command);
+    return successResponse(
+      typeof result === 'string' ? result : JSON.stringify(result ?? null, null, 2)
+    );
+  } catch (error) {
+    return errorResponse(`App browser command failed: ${message(error)}`);
   }
 }

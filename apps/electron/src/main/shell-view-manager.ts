@@ -24,6 +24,7 @@ import type { ExternalAppRegistry } from './external-app-registry'
 import { registerExternalAppProtocolForSession } from './external-app-protocol'
 import { buildInstalledAppSummaries, createSettingsDefinition, SETTINGS_APP_ID } from './internal-app-registry'
 import { isValidSettingsSubpage, type SettingsSubpage } from '../shared/settings-registry'
+import { BrowserCDP } from './browser-cdp'
 
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
 
@@ -75,6 +76,7 @@ export class ShellViewManager {
   private readonly registeredWebToolHandlers = new Map<number, Set<string>>()
   private readonly pendingWebToolCalls = new Map<string, PendingWebToolCall>()
   private readonly webToolRegistrationWaiters = new Map<string, Set<WebToolRegistrationWaiter>>()
+  private readonly appBrowserControllers = new Map<number, BrowserCDP>()
   private readonly guestWebContents = new Map<number, WebContents>()
   private readonly pendingGuestDescriptors: GuestDescriptor[] = []
   private readonly queuedAgentCommands: AgentShellCommand[] = []
@@ -292,6 +294,7 @@ export class ShellViewManager {
         windowLog.error(`Surface renderer gone: kind=${kind}, wc=${contents.id}, reason=${details.reason}`)
       })
       contents.on('did-start-navigation', () => {
+        this.resetAppBrowserController(contents.id)
         this.registeredWebToolHandlers.delete(contents.id)
         this.rejectWebToolCallsForRenderer(contents.id, 'App navigated before WebTool completed')
       })
@@ -327,6 +330,7 @@ export class ShellViewManager {
   private detachGuest(webContentsId: number): void {
     if (!this.guestWebContents.delete(webContentsId)) return
     this.registeredWebToolHandlers.delete(webContentsId)
+    this.resetAppBrowserController(webContentsId)
     this.rejectWebToolCallsForRenderer(webContentsId, 'App renderer closed before WebTool completed')
     this.unregisterSurface(webContentsId)
     if (this.agentWebContents?.id === webContentsId) {
@@ -453,6 +457,169 @@ export class ShellViewManager {
         arguments: args,
       })
     })
+  }
+
+  async appBrowser(appId: string, command: string | string[]): Promise<unknown> {
+    const managed = [...this.managedTabs.values()].find(item => item.definition.id === appId)
+    const contents = managed?.webContents
+    if (!managed || !contents || contents.isDestroyed()) {
+      throw new Error(`App ${appId} is not open or its WebView is not ready. Call open_app first.`)
+    }
+    const tokens = normalizeAppBrowserCommand(command)
+    const action = tokens.shift()?.toLowerCase()
+    if (!action || action === '--help' || action === 'help') return getAppBrowserHelp()
+
+    const cdp = this.getAppBrowserController(contents)
+    let result: unknown
+
+    switch (action) {
+      case 'source':
+      case 'html': {
+        const selector = tokens.join(' ').trim()
+        result = await contents.executeJavaScript(`(() => {
+          const selector = ${JSON.stringify(selector)};
+          const node = selector ? document.querySelector(selector) : document.documentElement;
+          if (!node) throw new Error('Selector not found: ' + selector);
+          const html = node.outerHTML || '';
+          const limit = 200000;
+          return { html: html.slice(0, limit), truncated: html.length > limit, totalCharacters: html.length };
+        })()`)
+        break
+      }
+      case 'snapshot':
+        result = await cdp.getAccessibilitySnapshot()
+        break
+      case 'click': {
+        const ref = requireAppBrowserArg(tokens[0], 'click requires an @eN ref')
+        result = await cdp.clickElement(ref)
+        break
+      }
+      case 'click-at': {
+        const [x, y] = parseAppBrowserNumbers(tokens, 2, 'click-at requires x y')
+        await cdp.clickAtCoordinates(x!, y!)
+        result = { x, y }
+        break
+      }
+      case 'fill': {
+        const ref = requireAppBrowserArg(tokens.shift(), 'fill requires ref and value')
+        const value = tokens.join(' ')
+        if (tokens.length === 0) throw new Error('fill requires ref and value')
+        result = await cdp.fillElement(ref, value)
+        break
+      }
+      case 'type': {
+        const text = tokens.join(' ')
+        if (!text) throw new Error('type requires text')
+        await cdp.typeText(text)
+        result = { typed: text.length }
+        break
+      }
+      case 'select': {
+        const ref = requireAppBrowserArg(tokens.shift(), 'select requires ref and value')
+        const value = tokens.join(' ')
+        if (tokens.length === 0) throw new Error('select requires ref and value')
+        result = await cdp.selectOption(ref, value)
+        break
+      }
+      case 'scroll': {
+        const direction = requireAppBrowserArg(tokens[0], 'scroll requires direction')
+        if (!['up', 'down', 'left', 'right'].includes(direction)) {
+          throw new Error('scroll direction must be up, down, left, or right')
+        }
+        const amount = tokens[1] === undefined ? 500 : Number(tokens[1])
+        if (!Number.isFinite(amount) || amount <= 0) throw new Error('scroll amount must be a positive number')
+        result = await contents.executeJavaScript(`(() => {
+          const direction = ${JSON.stringify(direction)};
+          const amount = ${amount};
+          const dx = direction === 'left' ? -amount : direction === 'right' ? amount : 0;
+          const dy = direction === 'up' ? -amount : direction === 'down' ? amount : 0;
+          window.scrollBy({ left: dx, top: dy, behavior: 'auto' });
+          return { scrollX: window.scrollX, scrollY: window.scrollY };
+        })()`)
+        break
+      }
+      case 'drag': {
+        if (tokens.length === 2 && tokens.every(token => /^@e\d+$/.test(token))) {
+          const from = await cdp.getElementGeometry(tokens[0]!)
+          const to = await cdp.getElementGeometry(tokens[1]!)
+          await cdp.drag(from.clickPoint.x, from.clickPoint.y, to.clickPoint.x, to.clickPoint.y)
+          result = { from, to }
+        } else {
+          const [x1, y1, x2, y2] = parseAppBrowserNumbers(tokens, 4, 'drag requires sourceRef targetRef or x1 y1 x2 y2')
+          await cdp.drag(x1!, y1!, x2!, y2!)
+          result = { x1, y1, x2, y2 }
+        }
+        break
+      }
+      case 'key': {
+        const keyCode = requireAppBrowserArg(tokens.shift(), 'key requires a key name')
+        const modifiers = tokens.filter(token => ['shift', 'control', 'alt', 'meta'].includes(token.toLowerCase()))
+          .map(token => token.toLowerCase()) as Array<'shift' | 'control' | 'alt' | 'meta'>
+        contents.sendInputEvent({ type: 'keyDown', keyCode, modifiers })
+        contents.sendInputEvent({ type: 'keyUp', keyCode, modifiers })
+        result = { key: keyCode, modifiers }
+        break
+      }
+      case 'text': {
+        const selector = tokens.join(' ').trim() || 'body'
+        result = await contents.executeJavaScript(`(() => {
+          const selector = ${JSON.stringify(selector)};
+          const node = document.querySelector(selector);
+          if (!node) throw new Error('Selector not found: ' + selector);
+          const text = node.innerText || node.textContent || '';
+          const limit = 100000;
+          return { text: text.slice(0, limit), truncated: text.length > limit, totalCharacters: text.length };
+        })()`)
+        break
+      }
+      case 'evaluate': {
+        const expression = tokens.join(' ')
+        if (!expression) throw new Error('evaluate requires a JavaScript expression')
+        result = limitAppBrowserResult(await evaluateInAppRenderer(contents, expression))
+        break
+      }
+      case 'title':
+        result = contents.getTitle()
+        break
+      case 'url':
+        result = contents.getURL()
+        break
+      case 'back':
+        contents.goBack()
+        result = { navigated: 'back' }
+        break
+      case 'forward':
+        contents.goForward()
+        result = { navigated: 'forward' }
+        break
+      case 'reload':
+        contents.reload()
+        result = { reloaded: true }
+        break
+      default:
+        throw new Error(`Unknown app_browser command: ${action}. Use --help.`)
+    }
+
+    return {
+      appId,
+      command: action,
+      url: contents.getURL(),
+      title: contents.getTitle(),
+      result,
+    }
+  }
+
+  private getAppBrowserController(contents: WebContents): BrowserCDP {
+    const existing = this.appBrowserControllers.get(contents.id)
+    if (existing) return existing
+    const controller = new BrowserCDP(contents)
+    this.appBrowserControllers.set(contents.id, controller)
+    return controller
+  }
+
+  private resetAppBrowserController(webContentsId: number): void {
+    this.appBrowserControllers.get(webContentsId)?.detach()
+    this.appBrowserControllers.delete(webContentsId)
   }
 
   handleWebToolRegistered(webContentsId: number, handler: string): void {
@@ -754,6 +921,8 @@ export class ShellViewManager {
       }
     }
     this.webToolRegistrationWaiters.clear()
+    for (const controller of this.appBrowserControllers.values()) controller.detach()
+    this.appBrowserControllers.clear()
     for (const contents of this.guestWebContents.values()) {
       if (!contents.isDestroyed()) contents.close()
     }
@@ -766,6 +935,229 @@ export class ShellViewManager {
     this.agentRendererReady = false
     this.homeWebContents = null
     this.settingsWebContents = null
+  }
+}
+
+function getAppBrowserHelp(): string {
+  return [
+    'app_browser commands:',
+    '  source [selector]',
+    '  snapshot',
+    '  click <@eN>',
+    '  click-at <x> <y>',
+    '  fill <@eN> <value>',
+    '  type <text>',
+    '  select <@eN> <value>',
+    '  scroll <up|down|left|right> [amount]',
+    '  drag <sourceRef> <targetRef>',
+    '  drag <x1> <y1> <x2> <y2>',
+    '  key <key> [shift|control|alt|meta...]',
+    '  text [selector]',
+    '  evaluate <expression>',
+    '  title | url | back | forward | reload',
+    '',
+    'Workflow: open_app → snapshot → action using @eN → snapshot again.',
+    'Prefer array command form when values contain spaces or JavaScript.',
+  ].join('\n')
+}
+
+function tokenizeAppBrowserCommand(input: string): string[] {
+  const tokens: string[] = []
+  let token = ''
+  let quote: '"' | "'" | null = null
+  let escaped = false
+  for (const char of input.trim()) {
+    if (escaped) {
+      token += char
+      escaped = false
+      continue
+    }
+    if (char === '\\') {
+      escaped = true
+      continue
+    }
+    if (quote) {
+      if (char === quote) quote = null
+      else token += char
+      continue
+    }
+    if (char === '"' || char === "'") {
+      quote = char
+      continue
+    }
+    if (/\s/.test(char)) {
+      if (token) {
+        tokens.push(token)
+        token = ''
+      }
+      continue
+    }
+    token += char
+  }
+  if (escaped) token += '\\'
+  if (quote) throw new Error('Unterminated quote in app_browser command')
+  if (token) tokens.push(token)
+  return tokens
+}
+
+function normalizeAppBrowserCommand(command: string | string[]): string[] {
+  if (Array.isArray(command)) return command.map(String)
+  const trimmed = command.trim()
+  if (!trimmed.startsWith('[')) {
+    // JavaScript expressions must retain their quotes/backslashes verbatim.
+    // Shell-style tokenization would turn getElementById("todo-title") into
+    // getElementById(todo-title), producing `todo is not defined`.
+    const evaluateMatch = trimmed.match(/^evaluate(?:\s+([\s\S]*))?$/i)
+    if (evaluateMatch) {
+      return ['evaluate', evaluateMatch[1] ?? '']
+    }
+    return tokenizeAppBrowserCommand(trimmed)
+  }
+
+  // Models sometimes serialize array-form commands into the string field.
+  // Accept both strict JSON (`["evaluate", "document.title"]`) and the common
+  // agent shorthand (`[evaluate, document.title]`).
+  if (trimmed.endsWith(']')) {
+    try {
+      const parsed = JSON.parse(trimmed)
+      if (Array.isArray(parsed)) return parsed.map(String)
+    } catch {
+      // Fall through to the lenient bracket-array parser.
+    }
+  }
+
+  const body = trimmed.slice(1, trimmed.endsWith(']') ? -1 : undefined).trim()
+  const separator = findTopLevelComma(body)
+  if (separator < 0) return tokenizeAppBrowserCommand(body)
+  const action = stripMatchingQuotes(body.slice(0, separator).trim())
+  const remainder = body.slice(separator + 1).trim()
+
+  // These commands treat everything after the command name as one payload;
+  // commas inside JS, selectors, or text must survive unchanged.
+  if (['evaluate', 'type', 'source', 'html', 'text'].includes(action.toLowerCase())) {
+    return [action, stripMatchingQuotes(remainder)]
+  }
+
+  return [action, ...splitTopLevelCommaList(remainder).map(stripMatchingQuotes)]
+}
+
+function findTopLevelComma(value: string): number {
+  let quote: '"' | "'" | '`' | null = null
+  let escaped = false
+  let depth = 0
+  for (let index = 0; index < value.length; index++) {
+    const char = value[index]!
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (char === '\\') {
+      escaped = true
+      continue
+    }
+    if (quote) {
+      if (char === quote) quote = null
+      continue
+    }
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char
+      continue
+    }
+    if (char === '(' || char === '[' || char === '{') depth++
+    else if (char === ')' || char === ']' || char === '}') depth = Math.max(0, depth - 1)
+    else if (char === ',' && depth === 0) return index
+  }
+  return -1
+}
+
+function splitTopLevelCommaList(value: string): string[] {
+  const parts: string[] = []
+  let remaining = value
+  while (remaining) {
+    const separator = findTopLevelComma(remaining)
+    if (separator < 0) {
+      parts.push(remaining.trim())
+      break
+    }
+    parts.push(remaining.slice(0, separator).trim())
+    remaining = remaining.slice(separator + 1).trim()
+  }
+  return parts.filter(part => part.length > 0)
+}
+
+function stripMatchingQuotes(value: string): string {
+  if (value.length < 2) return value
+  const first = value[0]
+  const last = value[value.length - 1]
+  return first === last && (first === '"' || first === "'" || first === '`')
+    ? value.slice(1, -1)
+    : value
+}
+
+async function evaluateInAppRenderer(contents: WebContents, expression: string): Promise<unknown> {
+  const envelope = await contents.executeJavaScript(`(async () => {
+    try {
+      const value = await (0, eval)(${JSON.stringify(expression)});
+      try {
+        if (value === undefined) return { __hxsyAppBrowserOk: true, value: null };
+        const serialized = JSON.stringify(value);
+        if (serialized === undefined) {
+          throw new Error('JSON.stringify returned undefined');
+        }
+        return { __hxsyAppBrowserOk: true, value: JSON.parse(serialized) };
+      } catch (serializationError) {
+        return {
+          __hxsyAppBrowserOk: false,
+          error: 'Evaluation result is not serializable: ' + String(serializationError),
+        };
+      }
+    } catch (error) {
+      return {
+        __hxsyAppBrowserOk: false,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      };
+    }
+  })()`)
+
+  if (!envelope || typeof envelope !== 'object' || !('__hxsyAppBrowserOk' in envelope)) {
+    throw new Error('Renderer evaluate returned an invalid response envelope')
+  }
+  const response = envelope as {
+    __hxsyAppBrowserOk: boolean
+    value?: unknown
+    error?: string
+    stack?: string
+  }
+  if (!response.__hxsyAppBrowserOk) {
+    throw new Error([
+      `Renderer evaluate failed: ${response.error || 'Unknown renderer error'}`,
+      response.stack,
+    ].filter(Boolean).join('\n'))
+  }
+  return response.value ?? null
+}
+
+function requireAppBrowserArg(value: string | undefined, error: string): string {
+  if (!value) throw new Error(error)
+  return value
+}
+
+function parseAppBrowserNumbers(tokens: string[], count: number, error: string): number[] {
+  if (tokens.length !== count) throw new Error(error)
+  const numbers = tokens.map(Number)
+  if (numbers.some(value => !Number.isFinite(value))) throw new Error(error)
+  return numbers
+}
+
+function limitAppBrowserResult(value: unknown): unknown {
+  if (value === undefined) return null
+  try {
+    const serialized = JSON.stringify(value)
+    if (serialized.length <= 200_000) return value
+    return { truncated: true, preview: serialized.slice(0, 200_000), totalCharacters: serialized.length }
+  } catch {
+    return String(value)
   }
 }
 

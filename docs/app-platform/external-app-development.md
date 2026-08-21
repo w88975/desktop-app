@@ -431,3 +431,11 @@ list_apps → open_app → call_webtool → result → optional close_app
 ```
 
 WebTool arguments must match `inputSchema`. Return values must be structured-clone/JSON serializable and stay below 1 MB. Calls time out after 15 seconds. Closing, navigating, or crashing app renderer rejects pending calls.
+
+Agent 也可使用 `app_browser` 直接检查与操作已打开 App 的 WebView：
+
+```text
+open_app → app_browser snapshot → click/fill/scroll/drag → snapshot
+```
+
+`source [selector]`返回当前渲染 HTML；`snapshot`返回带 `@eN` refs 的 accessibility tree。每个 App renderer 使用独立 CDP controller/ref map，导航或 reload 后必须重新 snapshot。

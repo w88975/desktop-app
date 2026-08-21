@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { SessionToolContext } from '../context.ts';
-import { handleCallWebTool, handleCloseApp, handleListApps, handleOpenApp } from './apps.ts';
+import { handleAppBrowser, handleCallWebTool, handleCloseApp, handleListApps, handleOpenApp } from './apps.ts';
 
 function context(overrides: Partial<SessionToolContext> = {}): SessionToolContext {
   return {
@@ -29,6 +29,7 @@ describe('app session tools', () => {
       openApp: async appId => ({ appId, tabId: 'tab-1', status: 'opened' }),
       callWebTool: async (_appId, _functionName, args) => ({ created: args.title }),
       closeApp: async appId => ({ appId, tabId: 'tab-1', status: 'closed' }),
+      appBrowser: async (_appId, command) => ({ command, nodes: [{ ref: '@e1', role: 'button' }] }),
     });
 
     expect((await handleListApps(ctx, {})).content[0].text).toContain('create_todo');
@@ -39,6 +40,7 @@ describe('app session tools', () => {
     expect(called.isError).toBe(false);
     expect(called.structuredContent).toEqual({ created: 'Ship it' });
     expect((await handleCloseApp(ctx, { appId: 'todo' })).content[0].text).toContain('"status": "closed"');
+    expect((await handleAppBrowser(ctx, { appId: 'todo', command: 'snapshot' })).content[0].text).toContain('@e1');
   });
 
   it('fails clearly outside desktop host', async () => {

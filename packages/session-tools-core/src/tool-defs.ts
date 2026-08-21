@@ -43,7 +43,7 @@ import { handleCreateTask } from './handlers/create-task.ts';
 import { handleArchiveSession } from './handlers/archive-session.ts';
 import { handleSendAgentMessage } from './handlers/send-agent-message.ts';
 import { handleListMessagingChannels, handleUnbindMessagingChannel } from './handlers/messaging.ts';
-import { handleListApps, handleOpenApp, handleCloseApp, handleCallWebTool } from './handlers/apps.ts';
+import { handleListApps, handleOpenApp, handleCloseApp, handleCallWebTool, handleAppBrowser } from './handlers/apps.ts';
 
 // ============================================================
 // Canonical Zod Schemas
@@ -261,6 +261,13 @@ export const CallWebToolSchema = z.object({
   functionName: z.string().describe('Manifest webTools[].name, not the internal handler name'),
   arguments: z.record(z.string(), z.unknown()).optional()
     .describe('Arguments matching the selected WebTool inputSchema. Defaults to an empty object.'),
+});
+
+export const AppBrowserSchema = z.object({
+  appId: z.string().describe('Open App ID to inspect or control'),
+  command: z.union([z.string(), z.array(z.string())]).describe(
+    'Browser-style command. Prefer array form when arguments contain spaces, quotes, or source code.'
+  ),
 });
 
 // ============================================================
@@ -568,6 +575,23 @@ This destroys the app renderer. Call open_app again before any later call_webtoo
 
 Required flow: discover the app/function with list_apps (or <installed_apps>), open it with open_app, then call this tool using webTools[].name and arguments matching inputSchema.
 Only manifest-declared functions are allowed. The app must also register the mapped handler at runtime through window.agent.tools.<handler>.`,
+
+  app_browser: `Inspect and simulate user interaction inside an open App WebView.
+
+Uses an agent-browser-style snapshot/ref loop. Required workflow: open_app → app_browser snapshot → interact with @eN refs → snapshot again after page changes.
+
+Commands:
+- source [selector] — current rendered HTML source (capped)
+- snapshot — accessibility snapshot with @eN refs
+- click <ref> | click-at <x> <y>
+- fill <ref> <value> | type <text> | select <ref> <value>
+- scroll <up|down|left|right> [amount]
+- drag <x1> <y1> <x2> <y2> | drag <sourceRef> <targetRef>
+- key <key> [shift|control|alt|meta...]
+- text [selector] | evaluate <expression>
+- title | url | back | forward | reload
+
+Refs belong to the latest snapshot for that App renderer. Re-snapshot after navigation or major DOM updates. Prefer semantic refs over coordinates.`,
 } as const;
 
 // ============================================================
@@ -651,6 +675,7 @@ export const SESSION_TOOL_DEFS: SessionToolDef[] = [
   { name: 'open_app', description: TOOL_DESCRIPTIONS.open_app, inputSchema: OpenAppSchema, executionMode: 'registry', safeMode: 'allow', handler: handleOpenApp },
   { name: 'close_app', description: TOOL_DESCRIPTIONS.close_app, inputSchema: CloseAppSchema, executionMode: 'registry', safeMode: 'block', handler: handleCloseApp },
   { name: 'call_webtool', description: TOOL_DESCRIPTIONS.call_webtool, inputSchema: CallWebToolSchema, executionMode: 'registry', safeMode: 'block', handler: handleCallWebTool },
+  { name: 'app_browser', description: TOOL_DESCRIPTIONS.app_browser, inputSchema: AppBrowserSchema, executionMode: 'registry', safeMode: 'block', handler: handleAppBrowser },
 ];
 
 export interface SessionToolFilterOptions {

@@ -228,12 +228,14 @@ describe('attachSessionSelfManagementBindings', () => {
         openApp: async appId => ({ appId, tabId: 'tab-1', status: 'opened' }),
         closeApp: async appId => ({ appId, tabId: 'tab-1', status: 'closed' }),
         callWebTool: async (_appId, _functionName, args) => ({ echoed: args }),
+        appBrowser: async (_appId, command) => ({ command }),
       },
     });
 
     expect((await ctx.listApps!())[0]?.appId).toBe('todo');
     expect(await ctx.openApp!('todo')).toMatchObject({ status: 'opened' });
     expect(await ctx.callWebTool!('todo', 'echo', { value: 1 })).toEqual({ echoed: { value: 1 } });
+    expect(await ctx.appBrowser!('todo', 'snapshot')).toEqual({ command: 'snapshot' });
     expect(await ctx.closeApp!('todo')).toMatchObject({ status: 'closed' });
   });
 });

@@ -98,6 +98,7 @@ export interface AppControllerFns {
   openApp(appId: string): Promise<AppTabActionResult>;
   closeApp(appId: string): Promise<AppTabActionResult>;
   callWebTool(appId: string, functionName: string, args: Record<string, unknown>): Promise<unknown>;
+  appBrowser(appId: string, command: string | string[]): Promise<unknown>;
 }
 
 // Registry of callbacks keyed by sessionId
