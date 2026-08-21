@@ -1,4 +1,4 @@
-import { describe, it, expect, mock, beforeEach } from 'bun:test'
+import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test'
 
 // Stub the preferences module so we can toggle `getCoAuthorPreference` per test
 // without touching disk. `formatPreferencesForPrompt` is stubbed to '' because
@@ -10,12 +10,36 @@ mock.module('../../config/preferences.ts', () => ({
 }))
 
 import { getSystemPrompt, formatProjectContextForPrompt } from '../system'
+import { setInstalledAppsPromptProvider } from '../installed-apps'
 import type { ProjectPromptContext } from '../../projects/types.ts'
 
 const GIT_CONVENTIONS_HEADING = '## Git Conventions'
 const CO_AUTHOR_TRAILER = 'Co-Authored-By: Craft Agent <agents-noreply@craft.do>'
 
+afterEach(() => setInstalledAppsPromptProvider(null))
+
 describe('system prompt guidance', () => {
+  it('includes the live installed-app catalog supplied by the host', () => {
+    setInstalledAppsPromptProvider(() => [{
+      appId: 'todo',
+      kind: 'built-in',
+      status: 'ready',
+      title: 'TODO',
+      webTools: [{
+        name: 'create_todo',
+        description: '创建一个待办事项',
+        handler: 'createTodo',
+        inputSchema: { type: 'object' },
+      }],
+    }])
+
+    const prompt = getSystemPrompt(undefined, undefined, '/tmp/workspace', '/tmp/workspace')
+
+    expect(prompt).toContain('## Installed Main Apps')
+    expect(prompt).toContain('"appId": "todo"')
+    expect(prompt).toContain('"name": "create_todo"')
+  })
+
   it('uses backend-neutral debug log querying guidance (rg/grep via Bash)', () => {
     const prompt = getSystemPrompt(
       undefined,

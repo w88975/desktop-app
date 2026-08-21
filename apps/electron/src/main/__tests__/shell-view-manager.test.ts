@@ -25,7 +25,17 @@ function createExternalAppRegistry() {
     description: '内置待办事项',
     iconUrl: 'hxsy-app://todo-placeholder/icon.svg',
     entryUrl: 'hxsy-app://todo-placeholder/index.html',
-    webTools: [],
+    webTools: [{
+      name: 'create_todo',
+      description: '创建一个待办事项',
+      handler: 'createTodo',
+      inputSchema: {
+        type: 'object',
+        properties: { title: { type: 'string' } },
+        required: ['title'],
+        additionalProperties: false,
+      },
+    }],
   }
   return {
     list: () => [structuredClone(todo)],
@@ -104,7 +114,7 @@ function createGuest(id: number, url: string) {
     emit,
     on: (event: string, callback: Function) => listeners.set(event, [...(listeners.get(event) ?? []), callback]),
     once: (event: string, callback: Function) => listeners.set(event, [...(listeners.get(event) ?? []), callback]),
-    send: mock(() => {}),
+    send: mock((..._args: unknown[]) => {}),
     close: mock(() => {
       if (destroyed) return
       destroyed = true
@@ -156,6 +166,91 @@ describe('ShellViewManager webview lifecycle', () => {
 
     manager.openApp('todo-placeholder')
     expect(manager.getState().tabs[0].id).not.toBe(first.id)
+  })
+
+  it('routes a manifest-declared WebTool to its registered app handler and returns the result', async () => {
+    const manager = new ShellViewManager({
+      window: createWindow() as any,
+      workspaceId: 'ws-1',
+      initialActiveTarget: 'home',
+      externalAppRegistry: createExternalAppRegistry() as any,
+      registerSurface: () => {},
+      unregisterSurface: () => {},
+    })
+
+    const opened = manager.openApp('todo-placeholder')
+    expect(opened.status).toBe('opened')
+    const tab = manager.getState().tabs[0]
+    const guest = createGuest(40, tab.entry)
+    expect(manager.attachGuest(guest as any)).toBe(true)
+    manager.handleWebToolRegistered(40, 'createTodo')
+
+    const resultPromise = manager.callWebTool('todo-placeholder', 'create_todo', { title: 'Ship it' })
+    await Promise.resolve()
+    const invocation = guest.send.mock.calls.find(call =>
+      call[0] === 'app-platform:external-web-tool-invoke'
+    )?.[1] as { callId: string; handler: string; arguments: Record<string, unknown> }
+    expect(invocation).toMatchObject({
+      handler: 'createTodo',
+      arguments: { title: 'Ship it' },
+    })
+
+    manager.handleWebToolResult(40, {
+      callId: invocation.callId,
+      ok: true,
+      result: { item: { title: 'Ship it' }, totalCount: 1 },
+    })
+    await expect(resultPromise).resolves.toEqual({ item: { title: 'Ship it' }, totalCount: 1 })
+
+    expect(manager.closeApp('todo-placeholder')).toMatchObject({ status: 'closed', tabId: tab.id })
+    expect(guest.close).toHaveBeenCalled()
+  })
+
+  it('rejects undeclared WebTools and arguments that violate manifest inputSchema', async () => {
+    const manager = new ShellViewManager({
+      window: createWindow() as any,
+      workspaceId: 'ws-1',
+      initialActiveTarget: 'home',
+      externalAppRegistry: createExternalAppRegistry() as any,
+      registerSurface: () => {},
+      unregisterSurface: () => {},
+    })
+    manager.openApp('todo-placeholder')
+
+    await expect(manager.callWebTool('todo-placeholder', 'delete_everything', {}))
+      .rejects.toThrow('does not expose WebTool')
+    await expect(manager.callWebTool('todo-placeholder', 'create_todo', { extra: true }))
+      .rejects.toThrow('arguments.title is required')
+    await expect(manager.callWebTool('todo-placeholder', 'create_todo', { title: 123 }))
+      .rejects.toThrow('arguments.title must be a string')
+
+    manager.destroy()
+  })
+
+  it('rejects a waiting WebTool call when the app closes before handler registration', async () => {
+    const manager = new ShellViewManager({
+      window: createWindow() as any,
+      workspaceId: 'ws-1',
+      initialActiveTarget: 'home',
+      externalAppRegistry: createExternalAppRegistry() as any,
+      registerSurface: () => {},
+      unregisterSurface: () => {},
+    })
+    manager.openApp('todo-placeholder')
+    const tab = manager.getState().tabs[0]
+    expect(manager.attachGuest(createGuest(41, tab.entry) as any)).toBe(true)
+
+    const resultPromise = manager.callWebTool('todo-placeholder', 'create_todo', { title: 'Never created' })
+    const rejection: Promise<Error> = resultPromise.then(
+      () => new Error('Expected WebTool call to reject'),
+      error => error as Error,
+    )
+    await Promise.resolve()
+    expect((manager as any).webToolRegistrationWaiters.size).toBe(1)
+    expect([...(manager as any).webToolRegistrationWaiters.values()][0].size).toBe(1)
+    expect(manager.closeApp('todo-placeholder').status).toBe('closed')
+    expect((manager as any).webToolRegistrationWaiters.size).toBe(0)
+    expect((await rejection).message).toContain('App closed before WebTool registered')
   })
 
   it('uses explicit Agent focus and queues commands/intents until renderer is ready', () => {

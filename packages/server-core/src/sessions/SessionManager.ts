@@ -125,6 +125,12 @@ interface SessionRuntimeHooks {
   captureException: (error: unknown, context?: { errorSource?: string; sessionId?: string }) => void
   onSessionStarted: () => void
   onSessionStopped: () => void
+  appController?: {
+    listApps: (workspaceId: string) => Promise<import('@craft-agent/session-tools-core').AppCatalogItem[]>
+    openApp: (workspaceId: string, appId: string) => Promise<import('@craft-agent/session-tools-core').AppTabActionResult>
+    closeApp: (workspaceId: string, appId: string) => Promise<import('@craft-agent/session-tools-core').AppTabActionResult>
+    callWebTool: (workspaceId: string, appId: string, functionName: string, args: Record<string, unknown>) => Promise<unknown>
+  }
 }
 
 const defaultSessionRuntimeHooks: SessionRuntimeHooks = {
@@ -4278,6 +4284,15 @@ export class SessionManager implements ISessionManager {
 
       // Wire up session self-management tools (set_session_labels, set_session_status, etc.)
       mergeSessionScopedToolCallbacks(managed.id, {
+        ...(sessionRuntimeHooks.appController ? {
+          appControllerFns: {
+            listApps: () => sessionRuntimeHooks.appController!.listApps(managed.workspace.id),
+            openApp: (appId: string) => sessionRuntimeHooks.appController!.openApp(managed.workspace.id, appId),
+            closeApp: (appId: string) => sessionRuntimeHooks.appController!.closeApp(managed.workspace.id, appId),
+            callWebTool: (appId: string, functionName: string, args: Record<string, unknown>) =>
+              sessionRuntimeHooks.appController!.callWebTool(managed.workspace.id, appId, functionName, args),
+          },
+        } : {}),
         setSessionLabelsFn: async (sessionId: string | undefined, labels: string[]) => {
           await this.setSessionLabels(sessionId ?? managed.id, labels)
         },

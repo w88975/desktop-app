@@ -4,6 +4,8 @@ This file accumulates release notes for the next unreleased version. PRs that ad
 
 ## Features
 
+- **Agent-controlled Apps and WebTools** — Agents can discover installed Apps, open or close their tabs, invoke manifest-declared functions registered by App pages through `window.agent.tools`, and receive structured results.
+
 ## Improvements
 
 ## Bug Fixes

@@ -78,3 +78,7 @@ export { handleCreateTask } from './create-task.ts';
 export type { CreateTaskArgs } from './create-task.ts';
 export { handleArchiveSession } from './archive-session.ts';
 export type { ArchiveSessionArgs } from './archive-session.ts';
+
+// Main App Control
+export { handleListApps, handleOpenApp, handleCloseApp, handleCallWebTool } from './apps.ts';
+export type { ListAppsArgs, OpenAppArgs, CloseAppArgs, CallWebToolArgs } from './apps.ts';

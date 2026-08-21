@@ -22,6 +22,19 @@ export interface ExternalWebToolManifest {
   handler: string
 }
 
+export interface ExternalWebToolInvokeRequest {
+  callId: string
+  handler: string
+  arguments: Record<string, unknown>
+}
+
+export interface ExternalWebToolResult {
+  callId: string
+  ok: boolean
+  result?: unknown
+  error?: string
+}
+
 export interface ExternalAppManifest {
   schemaVersion: 1
   appId: string
@@ -137,6 +150,9 @@ export const APP_PLATFORM_CHANNELS = {
   EXTERNAL_GET_APP_NAME: 'app-platform:external-get-app-name',
   EXTERNAL_GET_APP_VERSION: 'app-platform:external-get-app-version',
   EXTERNAL_OPEN_AGENT_PANEL: 'app-platform:external-open-agent-panel',
+  EXTERNAL_WEB_TOOL_INVOKE: 'app-platform:external-web-tool-invoke',
+  EXTERNAL_WEB_TOOL_RESULT: 'app-platform:external-web-tool-result',
+  EXTERNAL_WEB_TOOL_REGISTERED: 'app-platform:external-web-tool-registered',
   SETTINGS_GET_CONTEXT: 'app-platform:settings-get-context',
   SETTINGS_CONTEXT_CHANGED: 'app-platform:settings-context-changed',
   SETTINGS_NAVIGATE: 'app-platform:settings-navigate',
@@ -177,6 +193,73 @@ export interface HxsyAppBridge {
   getAppName(): Promise<string>
   getAppVersion(): Promise<string>
   openAgentPanel(): Promise<void>
+}
+
+export type AgentWebToolHandler = (args: Record<string, unknown>) => unknown | Promise<unknown>
+
+export interface AgentToolsRegistry {
+  [handler: string]: AgentWebToolHandler
+}
+
+export interface AgentAppBridge {
+  tools: AgentToolsRegistry
+}
+
+/**
+ * Runs in the app page's main world via contextBridge.executeInMainWorld().
+ * Keep self-contained: Electron serializes this function and cannot preserve closures.
+ */
+export function installAgentToolsMainWorldBridge(): void {
+  const handlers = new Map<string, (args: Record<string, unknown>) => unknown | Promise<unknown>>()
+  const tools = new Proxy(Object.create(null) as Record<string, unknown>, {
+    get: (_target, property) => typeof property === 'string' ? handlers.get(property) : undefined,
+    set: (_target, property, value) => {
+      if (typeof property !== 'string' || typeof value !== 'function') {
+        throw new TypeError('window.agent.tools handlers must be functions')
+      }
+      handlers.set(property, value as (args: Record<string, unknown>) => unknown | Promise<unknown>)
+      window.dispatchEvent(new CustomEvent('hxsy-agent-webtool-registered', { detail: property }))
+      return true
+    },
+    ownKeys: () => [...handlers.keys()],
+    getOwnPropertyDescriptor: (_target, property) => typeof property === 'string' && handlers.has(property)
+      ? { configurable: true, enumerable: true }
+      : undefined,
+  })
+
+  Object.defineProperty(window, 'agent', {
+    value: Object.freeze({ tools }),
+    configurable: false,
+    enumerable: true,
+    writable: false,
+  })
+
+  window.addEventListener('hxsy-agent-webtool-invoke', (event) => {
+    const detail = (event as CustomEvent<string>).detail
+    void (async () => {
+      let callId = 'unknown'
+      try {
+        const request = JSON.parse(detail) as ExternalWebToolInvokeRequest
+        callId = request.callId
+        const handler = handlers.get(request.handler)
+        if (!handler) throw new Error(`WebTool handler not registered: ${request.handler}`)
+        const result = await handler(request.arguments)
+        const serialized = JSON.stringify({ callId, ok: true, result: result ?? null })
+        if (serialized.length > 1_000_000) throw new Error('WebTool result exceeded 1MB')
+        window.dispatchEvent(new CustomEvent('hxsy-agent-webtool-result', {
+          detail: serialized,
+        }))
+      } catch (error) {
+        window.dispatchEvent(new CustomEvent('hxsy-agent-webtool-result', {
+          detail: JSON.stringify({
+            callId,
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        }))
+      }
+    })()
+  })
 }
 
 export interface SettingsAppContext {
@@ -243,6 +326,7 @@ declare global {
     shellAPI: ShellAPI
     appHostAPI: AppHostAPI
     hxsyApp: HxsyAppBridge
+    agent: AgentAppBridge
     settingsAppAPI: SettingsAppAPI
   }
 }

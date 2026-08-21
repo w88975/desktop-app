@@ -141,6 +141,38 @@ export function attachSessionSelfManagementBindings(
     enumerable: true,
   });
 
+  Object.defineProperty(context, 'listApps', {
+    get() {
+      return getSessionScopedToolCallbacks(sessionId)?.appControllerFns?.listApps;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(context, 'openApp', {
+    get() {
+      return getSessionScopedToolCallbacks(sessionId)?.appControllerFns?.openApp;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(context, 'closeApp', {
+    get() {
+      return getSessionScopedToolCallbacks(sessionId)?.appControllerFns?.closeApp;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(context, 'callWebTool', {
+    get() {
+      return getSessionScopedToolCallbacks(sessionId)?.appControllerFns?.callWebTool;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+
   // getSessionInfo needs wrapping to default sid → sessionId
   Object.defineProperty(context, 'getSessionInfo', {
     get() {

@@ -14,6 +14,7 @@ import type { LLMQueryRequest, LLMQueryResult } from './llm-tool.ts';
 import type { SpawnSessionFn } from './spawn-session-tool.ts';
 import type { BrowserPaneFns } from './browser-tools.ts';
 import type { AuthRequest } from '@craft-agent/session-tools-core';
+import type { AppCatalogItem, AppTabActionResult } from '@craft-agent/session-tools-core';
 import { debug } from '../utils/debug.ts';
 
 /**
@@ -87,6 +88,16 @@ export interface SessionScopedToolCallbacks {
   createTaskFn?: (
     input: import('@craft-agent/session-tools-core').CreateTaskInput
   ) => Promise<import('@craft-agent/session-tools-core').CreateTaskResult>;
+
+  /** Desktop-host app catalog, tab lifecycle, and WebTool invocation bridge. */
+  appControllerFns?: AppControllerFns;
+}
+
+export interface AppControllerFns {
+  listApps(): Promise<AppCatalogItem[]>;
+  openApp(appId: string): Promise<AppTabActionResult>;
+  closeApp(appId: string): Promise<AppTabActionResult>;
+  callWebTool(appId: string, functionName: string, args: Record<string, unknown>): Promise<unknown>;
 }
 
 // Registry of callbacks keyed by sessionId

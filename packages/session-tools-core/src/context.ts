@@ -349,6 +349,26 @@ export interface SessionToolContext {
   createTask?(input: CreateTaskInput): Promise<CreateTaskResult>;
 
   // ============================================================
+  // Main App Control
+  // ============================================================
+
+  /** List apps installed in the desktop host and their manifest-declared WebTools. */
+  listApps?(): Promise<AppCatalogItem[]>;
+
+  /** Open/activate an app tab in the desktop shell. */
+  openApp?(appId: string): Promise<AppTabActionResult>;
+
+  /** Close every open tab for an app in the desktop shell. */
+  closeApp?(appId: string): Promise<AppTabActionResult>;
+
+  /** Invoke one manifest-declared WebTool in an open app renderer. */
+  callWebTool?(
+    appId: string,
+    functionName: string,
+    args: Record<string, unknown>,
+  ): Promise<unknown>;
+
+  // ============================================================
   // Inter-Session Messaging
   // ============================================================
 
@@ -482,6 +502,30 @@ export interface CreateTaskResult {
   taskLabelId?: string;
   /** Fail-soft problems (unknown source/skill slugs, label failure, …). */
   warnings: string[];
+}
+
+export interface AppCatalogFunction {
+  name: string;
+  description: string;
+  handler: string;
+  inputSchema: Record<string, unknown>;
+}
+
+export interface AppCatalogItem {
+  appId: string;
+  title: string;
+  description?: string;
+  version?: string;
+  kind: string;
+  sourceType?: string;
+  status: string;
+  functions: AppCatalogFunction[];
+}
+
+export interface AppTabActionResult {
+  appId: string;
+  tabId?: string;
+  status: 'opened' | 'activated' | 'closed' | 'not-open';
 }
 
 export interface SessionInfo {

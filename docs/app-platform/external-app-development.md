@@ -14,10 +14,10 @@
 - 加载远程 Web App
 - Home页展示已发现 Apps
 - singleton tab
-- manifest中的 Web Tool元数据发现
+- manifest中的 Web Tool发现与 Agent调用
 - 3个基础 Host Bridge API
 
-首版不支持 Store、ZIP、签名、自动更新、Auth、MCP、Skill、Agent调用 Web Tool、
+首版不支持 Store、ZIP、签名、自动更新、Auth、MCP、Skill、
 卸载或跨 origin限制。
 
 ## 2. 打开 Apps目录
@@ -387,3 +387,47 @@ if (window.hxsyApp) {
   await window.hxsyApp.openAgentPanel()
 }
 ```
+## 11. Agent WebTools
+
+Apps expose Agent-callable functions in two steps:
+
+1. Declare public metadata in `manifest-hxsy.json`.
+2. Register implementation in page code through `window.agent.tools.<handler>`.
+
+```json
+{
+  "webTools": [
+    {
+      "name": "create_todo",
+      "description": "创建一个待办事项",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" }
+        },
+        "required": ["title"],
+        "additionalProperties": false
+      },
+      "handler": "createTodo"
+    }
+  ]
+}
+```
+
+```js
+window.agent.tools.createTodo = async ({ title }) => {
+  const item = await createTodo(title)
+  return { item }
+}
+```
+
+`name` is public Agent function name. `handler` maps it to page registration.
+Both checks apply at runtime: undeclared functions are rejected; declared functions whose handler was not registered fail with explicit error.
+
+Agent flow:
+
+```text
+list_apps → open_app → call_webtool → result → optional close_app
+```
+
+WebTool arguments must match `inputSchema`. Return values must be structured-clone/JSON serializable and stay below 1 MB. Calls time out after 15 seconds. Closing, navigating, or crashing app renderer rejects pending calls.

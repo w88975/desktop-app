@@ -15,7 +15,8 @@
         "properties": {
           "title": { "type": "string" }
         },
-        "required": ["title"]
+        "required": ["title"],
+        "additionalProperties": false
       },
       "handler": "createTodo"
     }

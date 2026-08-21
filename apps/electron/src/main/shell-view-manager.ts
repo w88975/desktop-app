@@ -13,6 +13,7 @@ import {
   type AppDefinition,
   type AppTab,
   type ExternalAppRecord,
+  type ExternalWebToolResult,
   type InstalledAppSummary,
   type ShellState,
   type SurfaceKind,
@@ -21,7 +22,7 @@ import {
 import { ShellTabManager, type ShellTabEffect } from './shell-tab-manager'
 import type { ExternalAppRegistry } from './external-app-registry'
 import { registerExternalAppProtocolForSession } from './external-app-protocol'
-import { createSettingsDefinition, getInternalInstalledApps, SETTINGS_APP_ID } from './internal-app-registry'
+import { buildInstalledAppSummaries, createSettingsDefinition, SETTINGS_APP_ID } from './internal-app-registry'
 import { isValidSettingsSubpage, type SettingsSubpage } from '../shared/settings-registry'
 
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
@@ -41,6 +42,19 @@ interface ManagedTab {
   webContents: WebContents | null
 }
 
+interface PendingWebToolCall {
+  webContentsId: number
+  resolve: (value: unknown) => void
+  reject: (error: Error) => void
+  timeout: ReturnType<typeof setTimeout>
+}
+
+interface WebToolRegistrationWaiter {
+  resolve: (contents: WebContents) => void
+  reject: (error: Error) => void
+  timeout: ReturnType<typeof setTimeout>
+}
+
 interface GuestDescriptor {
   kind: 'home' | 'agent' | 'app'
   tabId?: string
@@ -58,6 +72,9 @@ export class ShellViewManager {
   private readonly externalAppRegistry: ExternalAppRegistry
   private readonly unsubscribeExternalApps: () => void
   private readonly managedTabs = new Map<string, ManagedTab>()
+  private readonly registeredWebToolHandlers = new Map<number, Set<string>>()
+  private readonly pendingWebToolCalls = new Map<string, PendingWebToolCall>()
+  private readonly webToolRegistrationWaiters = new Map<string, Set<WebToolRegistrationWaiter>>()
   private readonly guestWebContents = new Map<number, WebContents>()
   private readonly pendingGuestDescriptors: GuestDescriptor[] = []
   private readonly queuedAgentCommands: AgentShellCommand[] = []
@@ -270,7 +287,13 @@ export class ShellViewManager {
         this.externalAppRegistry.markRuntimeError(descriptor.appId, errorDescription || `Load failed: ${errorCode}`)
       })
       contents.on('render-process-gone', (_event, details) => {
+        this.registeredWebToolHandlers.delete(contents.id)
+        this.rejectWebToolCallsForRenderer(contents.id, `App renderer stopped: ${details.reason}`)
         windowLog.error(`Surface renderer gone: kind=${kind}, wc=${contents.id}, reason=${details.reason}`)
+      })
+      contents.on('did-start-navigation', () => {
+        this.registeredWebToolHandlers.delete(contents.id)
+        this.rejectWebToolCallsForRenderer(contents.id, 'App navigated before WebTool completed')
       })
       return
     }
@@ -303,6 +326,8 @@ export class ShellViewManager {
 
   private detachGuest(webContentsId: number): void {
     if (!this.guestWebContents.delete(webContentsId)) return
+    this.registeredWebToolHandlers.delete(webContentsId)
+    this.rejectWebToolCallsForRenderer(webContentsId, 'App renderer closed before WebTool completed')
     this.unregisterSurface(webContentsId)
     if (this.agentWebContents?.id === webContentsId) {
       this.agentWebContents = null
@@ -332,19 +357,7 @@ export class ShellViewManager {
   }
 
   getInstalledApps(): InstalledAppSummary[] {
-    const externalApps = this.externalAppRegistry.list().map(record => ({
-      appId: record.appId,
-      kind: record.sourceType === 'builtin' ? 'built-in' as const : 'external' as const,
-      sourceType: record.sourceType,
-      status: record.status,
-      title: record.title,
-      description: record.description,
-      version: record.version,
-      iconUrl: record.iconUrl,
-      error: record.error,
-      webTools: record.webTools,
-    })).sort((left, right) => left.title.localeCompare(right.title, 'zh-CN'))
-    return [...getInternalInstalledApps(), ...externalApps]
+    return buildInstalledAppSummaries(this.externalAppRegistry.list())
   }
 
   getAgentWebContentsId(): number | undefined {
@@ -360,7 +373,7 @@ export class ShellViewManager {
     this.emitAllState()
   }
 
-  openApp(appId: string): void {
+  openApp(appId: string): { appId: string; tabId: string; status: 'opened' | 'activated' } {
     const externalRecord = this.externalAppRegistry.get(appId)
     const tabId = randomUUID()
     const definition = appId === SETTINGS_APP_ID
@@ -384,6 +397,138 @@ export class ShellViewManager {
     this.emitAllState()
     if (externalRecord?.status === 'discovered') {
       void this.externalAppRegistry.resolveRemote(appId)
+    }
+    return {
+      appId,
+      tabId: transaction.value.tab.id,
+      status: transaction.value.created ? 'opened' : 'activated',
+    }
+  }
+
+  closeApp(appId: string): { appId: string; tabId?: string; status: 'closed' | 'not-open' } {
+    const tabs = [...this.managedTabs.values()].filter(item => item.definition.id === appId)
+    if (tabs.length === 0) return { appId, status: 'not-open' }
+    this.rejectWebToolWaitersForApp(appId, 'App closed before WebTool registered')
+    for (const tab of tabs) this.closeTab(tab.tab.id)
+    return { appId, tabId: tabs[0]?.tab.id, status: 'closed' }
+  }
+
+  async callWebTool(
+    appId: string,
+    functionName: string,
+    args: Record<string, unknown>,
+  ): Promise<unknown> {
+    const record = this.externalAppRegistry.get(appId)
+    if (!record) throw new Error(`Unknown app: ${appId}`)
+    if (record.status !== 'ready') throw new Error(`App ${appId} is not ready (status: ${record.status})`)
+    const tool = record.webTools.find(candidate => candidate.name === functionName)
+    if (!tool) {
+      const available = record.webTools.map(candidate => candidate.name)
+      throw new Error(`App ${appId} does not expose WebTool "${functionName}". Available: ${available.join(', ') || '(none)'}`)
+    }
+    const validationErrors = validateWebToolArguments(args, tool.inputSchema)
+    if (validationErrors.length > 0) {
+      throw new Error(`Invalid arguments for ${appId}.${functionName}: ${validationErrors.join('; ')}`)
+    }
+    if (![...this.managedTabs.values()].some(item => item.definition.id === appId)) {
+      throw new Error(`App ${appId} is not open. Call open_app first.`)
+    }
+
+    const contents = await this.waitForRegisteredWebTool(appId, tool.handler)
+    const callId = randomUUID()
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.pendingWebToolCalls.delete(callId)
+        reject(new Error(`WebTool call timed out after 15s: ${appId}.${functionName}`))
+      }, 15_000)
+      this.pendingWebToolCalls.set(callId, {
+        webContentsId: contents.id,
+        resolve,
+        reject,
+        timeout,
+      })
+      contents.send(APP_PLATFORM_CHANNELS.EXTERNAL_WEB_TOOL_INVOKE, {
+        callId,
+        handler: tool.handler,
+        arguments: args,
+      })
+    })
+  }
+
+  handleWebToolRegistered(webContentsId: number, handler: string): void {
+    const tab = [...this.managedTabs.values()].find(item => item.webContents?.id === webContentsId)
+    if (!tab) return
+    const record = this.externalAppRegistry.get(tab.definition.id)
+    if (!record?.webTools.some(tool => tool.handler === handler)) {
+      windowLog.warn(`[app-platform] Ignored undeclared WebTool handler registration: app=${tab.definition.id} handler=${handler}`)
+      return
+    }
+    const handlers = this.registeredWebToolHandlers.get(webContentsId) ?? new Set<string>()
+    handlers.add(handler)
+    this.registeredWebToolHandlers.set(webContentsId, handlers)
+
+    const key = `${tab.definition.id}::${handler}`
+    const waiters = this.webToolRegistrationWaiters.get(key)
+    if (!waiters) return
+    this.webToolRegistrationWaiters.delete(key)
+    for (const waiter of waiters) {
+      clearTimeout(waiter.timeout)
+      waiter.resolve(tab.webContents!)
+    }
+  }
+
+  handleWebToolResult(webContentsId: number, result: ExternalWebToolResult): void {
+    const pending = this.pendingWebToolCalls.get(result.callId)
+    if (!pending || pending.webContentsId !== webContentsId) return
+    this.pendingWebToolCalls.delete(result.callId)
+    clearTimeout(pending.timeout)
+    if (result.ok) pending.resolve(result.result)
+    else pending.reject(new Error(result.error || 'App WebTool failed'))
+  }
+
+  private waitForRegisteredWebTool(appId: string, handler: string): Promise<WebContents> {
+    const tab = [...this.managedTabs.values()].find(item => item.definition.id === appId)
+    const contents = tab?.webContents
+    if (contents && !contents.isDestroyed() && this.registeredWebToolHandlers.get(contents.id)?.has(handler)) {
+      return Promise.resolve(contents)
+    }
+
+    const key = `${appId}::${handler}`
+    return new Promise((resolve, reject) => {
+      const waiter: WebToolRegistrationWaiter = {
+        resolve,
+        reject,
+        timeout: setTimeout(() => {
+          const waiters = this.webToolRegistrationWaiters.get(key)
+          waiters?.delete(waiter)
+          if (waiters?.size === 0) this.webToolRegistrationWaiters.delete(key)
+          reject(new Error(`App ${appId} did not register window.agent.tools.${handler} within 10s`))
+        }, 10_000),
+      }
+      const waiters = this.webToolRegistrationWaiters.get(key) ?? new Set<WebToolRegistrationWaiter>()
+      waiters.add(waiter)
+      this.webToolRegistrationWaiters.set(key, waiters)
+    })
+  }
+
+  private rejectWebToolCallsForRenderer(webContentsId: number, reason: string): void {
+    for (const [callId, pending] of this.pendingWebToolCalls) {
+      if (pending.webContentsId !== webContentsId) continue
+      this.pendingWebToolCalls.delete(callId)
+      clearTimeout(pending.timeout)
+      pending.reject(new Error(reason))
+    }
+  }
+
+  private rejectWebToolWaitersForApp(appId: string, reason: string): void {
+    for (const [key, waiters] of this.webToolRegistrationWaiters) {
+      if (!key.startsWith(`${appId}::`)) continue
+      const pending = [...waiters]
+      this.webToolRegistrationWaiters.delete(key)
+      for (const waiter of pending) {
+        clearTimeout(waiter.timeout)
+        waiter.reject(new Error(reason))
+      }
     }
   }
 
@@ -519,6 +664,7 @@ export class ShellViewManager {
       if (effect.type === 'close-app-renderer') {
         const managed = this.managedTabs.get(effect.tab.id)
         this.managedTabs.delete(effect.tab.id)
+        this.rejectWebToolWaitersForApp(effect.tab.appId, 'App closed before WebTool registered')
         if (managed?.webContents && !managed.webContents.isDestroyed()) managed.webContents.close()
         continue
       }
@@ -596,6 +742,18 @@ export class ShellViewManager {
     this.destroyed = true
     this.window.removeListener('resize', this.handleResize)
     this.unsubscribeExternalApps()
+    for (const pending of this.pendingWebToolCalls.values()) {
+      clearTimeout(pending.timeout)
+      pending.reject(new Error('App shell destroyed before WebTool completed'))
+    }
+    this.pendingWebToolCalls.clear()
+    for (const waiters of this.webToolRegistrationWaiters.values()) {
+      for (const waiter of waiters) {
+        clearTimeout(waiter.timeout)
+        waiter.reject(new Error('App shell destroyed before WebTool registered'))
+      }
+    }
+    this.webToolRegistrationWaiters.clear()
     for (const contents of this.guestWebContents.values()) {
       if (!contents.isDestroyed()) contents.close()
     }
@@ -609,4 +767,103 @@ export class ShellViewManager {
     this.homeWebContents = null
     this.settingsWebContents = null
   }
+}
+
+function validateWebToolArguments(
+  value: unknown,
+  schema: Record<string, unknown>,
+  path = 'arguments',
+  depth = 0,
+): string[] {
+  if (depth > 10) return [`${path} exceeds maximum schema depth`]
+  if ('const' in schema && !Object.is(schema.const, value)) {
+    return [`${path} must equal ${JSON.stringify(schema.const)}`]
+  }
+  if (Array.isArray(schema.enum) && !schema.enum.some(candidate => Object.is(candidate, value))) {
+    return [`${path} must be one of ${JSON.stringify(schema.enum)}`]
+  }
+
+  if (Array.isArray(schema.allOf)) {
+    return schema.allOf.flatMap((candidate, index) =>
+      candidate && typeof candidate === 'object' && !Array.isArray(candidate)
+        ? validateWebToolArguments(value, candidate as Record<string, unknown>, `${path}.allOf[${index}]`, depth + 1)
+        : [`${path}.allOf[${index}] is not a schema object`]
+    )
+  }
+  for (const keyword of ['anyOf', 'oneOf'] as const) {
+    const candidates = schema[keyword]
+    if (!Array.isArray(candidates)) continue
+    const matches = candidates.filter(candidate =>
+      candidate && typeof candidate === 'object' && !Array.isArray(candidate)
+      && validateWebToolArguments(value, candidate as Record<string, unknown>, path, depth + 1).length === 0
+    ).length
+    if (keyword === 'anyOf' && matches === 0) return [`${path} must match at least one anyOf schema`]
+    if (keyword === 'oneOf' && matches !== 1) return [`${path} must match exactly one oneOf schema`]
+  }
+
+  const type = schema.type
+  if (Array.isArray(type)) {
+    const matches = type.some(candidate =>
+      typeof candidate === 'string'
+      && validateWebToolArguments(value, { ...schema, type: candidate }, path, depth + 1).length === 0
+    )
+    return matches ? [] : [`${path} does not match allowed types: ${type.join(', ')}`]
+  }
+  if (type === 'object') {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return [`${path} must be an object`]
+    const object = value as Record<string, unknown>
+    const properties = schema.properties && typeof schema.properties === 'object' && !Array.isArray(schema.properties)
+      ? schema.properties as Record<string, Record<string, unknown>>
+      : {}
+    const errors: string[] = []
+    for (const required of Array.isArray(schema.required) ? schema.required : []) {
+      if (typeof required === 'string' && !(required in object)) errors.push(`${path}.${required} is required`)
+    }
+    for (const [key, child] of Object.entries(object)) {
+      const childSchema = properties[key]
+      if (childSchema) errors.push(...validateWebToolArguments(child, childSchema, `${path}.${key}`, depth + 1))
+      else if (schema.additionalProperties === false) errors.push(`${path}.${key} is not allowed`)
+    }
+    return errors
+  }
+  if (type === 'array') {
+    if (!Array.isArray(value)) return [`${path} must be an array`]
+    const errors: string[] = []
+    if (typeof schema.minItems === 'number' && value.length < schema.minItems) errors.push(`${path} must contain at least ${schema.minItems} items`)
+    if (typeof schema.maxItems === 'number' && value.length > schema.maxItems) errors.push(`${path} must contain at most ${schema.maxItems} items`)
+    const itemSchema = schema.items
+    if (!itemSchema || typeof itemSchema !== 'object' || Array.isArray(itemSchema)) return errors
+    errors.push(...value.flatMap((item, index) => validateWebToolArguments(
+      item,
+      itemSchema as Record<string, unknown>,
+      `${path}[${index}]`,
+      depth + 1,
+    )))
+    return errors
+  }
+  if (type === 'string') {
+    if (typeof value !== 'string') return [`${path} must be a string`]
+    const errors: string[] = []
+    if (typeof schema.minLength === 'number' && value.length < schema.minLength) errors.push(`${path} must contain at least ${schema.minLength} characters`)
+    if (typeof schema.maxLength === 'number' && value.length > schema.maxLength) errors.push(`${path} must contain at most ${schema.maxLength} characters`)
+    if (typeof schema.pattern === 'string') {
+      try {
+        if (!new RegExp(schema.pattern).test(value)) errors.push(`${path} must match pattern ${schema.pattern}`)
+      } catch {
+        errors.push(`${path} manifest pattern is invalid`)
+      }
+    }
+    return errors
+  }
+  if (type === 'number' && typeof value !== 'number') return [`${path} must be a number`]
+  if (type === 'integer' && (!Number.isInteger(value))) return [`${path} must be an integer`]
+  if (type === 'boolean' && typeof value !== 'boolean') return [`${path} must be a boolean`]
+  if (type === 'null' && value !== null) return [`${path} must be null`]
+  if ((type === 'number' || type === 'integer') && typeof value === 'number') {
+    const errors: string[] = []
+    if (typeof schema.minimum === 'number' && value < schema.minimum) errors.push(`${path} must be >= ${schema.minimum}`)
+    if (typeof schema.maximum === 'number' && value > schema.maximum) errors.push(`${path} must be <= ${schema.maximum}`)
+    return errors
+  }
+  return []
 }

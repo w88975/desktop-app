@@ -136,6 +136,9 @@ export type {
   ResolvedStatusResult,
   CreateTaskInput,
   CreateTaskResult,
+  AppCatalogFunction,
+  AppCatalogItem,
+  AppTabActionResult,
 } from './context.ts';
 
 export { createNodeFileSystem } from './context.ts';
@@ -169,6 +172,10 @@ export {
   handleRenderTemplate,
   // Send Developer Feedback
   handleSendDeveloperFeedback,
+  handleListApps,
+  handleOpenApp,
+  handleCloseApp,
+  handleCallWebTool,
 } from './handlers/index.ts';
 
 export type {
@@ -187,6 +194,10 @@ export type {
   ScriptSandboxArgs,
   RenderTemplateArgs,
   SendDeveloperFeedbackArgs,
+  ListAppsArgs,
+  OpenAppArgs,
+  CloseAppArgs,
+  CallWebToolArgs,
 } from './handlers/index.ts';
 
 // Tool definitions — single source of truth
@@ -208,6 +219,10 @@ export {
   BrowserToolSchema,
   // Developer feedback schema
   SendDeveloperFeedbackSchema,
+  ListAppsSchema,
+  OpenAppSchema,
+  CloseAppSchema,
+  CallWebToolSchema,
   // Descriptions
   TOOL_DESCRIPTIONS,
   // Registry

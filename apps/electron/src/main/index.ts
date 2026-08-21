@@ -111,11 +111,13 @@ import { ensureToolIcons, ensurePresetThemes } from '@craft-agent/shared/config'
 import { setBundledAssetsRoot } from '@craft-agent/shared/utils'
 import { initializeBackendHostRuntime } from '@craft-agent/shared/agent/backend'
 import { setPowerShellValidatorRoot } from '@craft-agent/shared/agent'
+import { setInstalledAppsPromptProvider } from '@craft-agent/shared/prompts'
 import { handleDeepLink } from './deep-link'
 import { BrowserPaneManager } from './browser-pane-manager'
 import { OAuthFlowStore } from '@craft-agent/shared/auth'
 import { registerThumbnailScheme, registerThumbnailHandler } from './thumbnail-protocol'
 import { ExternalAppRegistry } from './external-app-registry'
+import { buildInstalledAppSummaries } from './internal-app-registry'
 import { registerExternalAppProtocol, registerExternalAppScheme } from './external-app-protocol'
 import log, { isDebugMode, mainLog, getLogFilePath, getMessagingGatewayLogFilePath, messagingGatewayLog, autoUpdateLog } from './logger'
 import { setPerfEnabled, enableDebug } from '@craft-agent/shared/utils'
@@ -524,6 +526,7 @@ app.whenReady().then(async () => {
       onError: (message, error) => mainLog.warn(message, error),
     })
     await externalAppRegistry.initialize()
+    setInstalledAppsPromptProvider(() => buildInstalledAppSummaries(externalAppRegistry?.list() ?? []))
     registerExternalAppProtocol(externalAppRegistry)
 
     // Initialize window manager
@@ -686,6 +689,14 @@ app.whenReady().then(async () => {
     ipcMain.handle(APP_PLATFORM_CHANNELS.EXTERNAL_OPEN_AGENT_PANEL, event =>
       getExternalAppManager(event.sender.id).openAgentPanel()
     )
+    ipcMain.on(APP_PLATFORM_CHANNELS.EXTERNAL_WEB_TOOL_REGISTERED, (event, payload: { handler?: unknown }) => {
+      if (typeof payload?.handler !== 'string') return
+      getExternalAppManager(event.sender.id).handleWebToolRegistered(event.sender.id, payload.handler)
+    })
+    ipcMain.on(APP_PLATFORM_CHANNELS.EXTERNAL_WEB_TOOL_RESULT, (event, payload) => {
+      if (!payload || typeof payload.callId !== 'string' || typeof payload.ok !== 'boolean') return
+      getExternalAppManager(event.sender.id).handleWebToolResult(event.sender.id, payload)
+    })
 
     const getSettingsManager = (senderId: number) => {
       const surface = windowManager?.getSurfaceRegistration(senderId)
@@ -852,6 +863,13 @@ app.whenReady().then(async () => {
             updateBadgeCount,
             onSessionStarted,
             onSessionStopped,
+            appController: {
+              listApps: (workspaceId) => windowManager!.listAppsForAgent(workspaceId),
+              openApp: (workspaceId, appId) => windowManager!.openAppForAgent(workspaceId, appId),
+              closeApp: (workspaceId, appId) => windowManager!.closeAppForAgent(workspaceId, appId),
+              callWebTool: (workspaceId, appId, functionName, args) =>
+                windowManager!.callWebToolForAgent(workspaceId, appId, functionName, args),
+            },
             captureException: (error, context) => {
               Sentry.captureException(error instanceof Error ? error : new Error(String(error)), {
                 tags: {

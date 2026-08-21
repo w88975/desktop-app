@@ -43,6 +43,7 @@ import { handleCreateTask } from './handlers/create-task.ts';
 import { handleArchiveSession } from './handlers/archive-session.ts';
 import { handleSendAgentMessage } from './handlers/send-agent-message.ts';
 import { handleListMessagingChannels, handleUnbindMessagingChannel } from './handlers/messaging.ts';
+import { handleListApps, handleOpenApp, handleCloseApp, handleCallWebTool } from './handlers/apps.ts';
 
 // ============================================================
 // Canonical Zod Schemas
@@ -242,6 +243,24 @@ export const ListMessagingChannelsSchema = z.object({
 
 export const UnbindMessagingChannelSchema = z.object({
   platform: z.enum(['telegram', 'whatsapp']).optional().describe('Platform to unbind. If omitted, unbinds all.'),
+});
+
+// Main App control tools
+export const ListAppsSchema = z.object({});
+
+export const OpenAppSchema = z.object({
+  appId: z.string().describe('App ID from list_apps or the <installed_apps> system context'),
+});
+
+export const CloseAppSchema = z.object({
+  appId: z.string().describe('App ID whose open tab should be closed'),
+});
+
+export const CallWebToolSchema = z.object({
+  appId: z.string().describe('App ID from list_apps or the <installed_apps> system context'),
+  functionName: z.string().describe('Manifest webTools[].name, not the internal handler name'),
+  arguments: z.record(z.string(), z.unknown()).optional()
+    .describe('Arguments matching the selected WebTool inputSchema. Defaults to an empty object.'),
 });
 
 // ============================================================
@@ -532,6 +551,23 @@ Shows which external chat apps are connected and can send/receive messages.`,
 
   unbind_messaging_channel: `Disconnect a messaging channel from the current session.
 Messages will no longer be forwarded between the chat app and this session.`,
+
+  list_apps: `List apps installed in the current desktop host, including app metadata and manifest-declared WebTools.
+
+Use this to discover appId values and callable function names. A WebTool entry includes name, description, handler, and inputSchema.`,
+
+  open_app: `Open or activate an app in the main desktop shell. The app appears in the same tab bar as when the user opens it from Home.
+
+Call list_apps first when appId is unknown. Opening an already-open singleton app activates its existing tab.`,
+
+  close_app: `Close an app tab in the main desktop shell, using the same lifecycle as the tab close button.
+
+This destroys the app renderer. Call open_app again before any later call_webtool invocation.`,
+
+  call_webtool: `Invoke a WebTool exposed by an installed app and return its result.
+
+Required flow: discover the app/function with list_apps (or <installed_apps>), open it with open_app, then call this tool using webTools[].name and arguments matching inputSchema.
+Only manifest-declared functions are allowed. The app must also register the mapped handler at runtime through window.agent.tools.<handler>.`,
 } as const;
 
 // ============================================================
@@ -610,6 +646,11 @@ export const SESSION_TOOL_DEFS: SessionToolDef[] = [
   // Messaging gateway tools
   { name: 'list_messaging_channels', description: TOOL_DESCRIPTIONS.list_messaging_channels, inputSchema: ListMessagingChannelsSchema, executionMode: 'registry', safeMode: 'allow', readOnly: true, handler: handleListMessagingChannels },
   { name: 'unbind_messaging_channel', description: TOOL_DESCRIPTIONS.unbind_messaging_channel, inputSchema: UnbindMessagingChannelSchema, executionMode: 'registry', safeMode: 'block', handler: handleUnbindMessagingChannel },
+  // Main desktop app discovery/control
+  { name: 'list_apps', description: TOOL_DESCRIPTIONS.list_apps, inputSchema: ListAppsSchema, executionMode: 'registry', safeMode: 'allow', readOnly: true, handler: handleListApps },
+  { name: 'open_app', description: TOOL_DESCRIPTIONS.open_app, inputSchema: OpenAppSchema, executionMode: 'registry', safeMode: 'allow', handler: handleOpenApp },
+  { name: 'close_app', description: TOOL_DESCRIPTIONS.close_app, inputSchema: CloseAppSchema, executionMode: 'registry', safeMode: 'block', handler: handleCloseApp },
+  { name: 'call_webtool', description: TOOL_DESCRIPTIONS.call_webtool, inputSchema: CallWebToolSchema, executionMode: 'registry', safeMode: 'block', handler: handleCallWebTool },
 ];
 
 export interface SessionToolFilterOptions {

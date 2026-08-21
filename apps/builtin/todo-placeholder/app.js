@@ -20,6 +20,18 @@ function saveItems() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
 }
 
+function createTodo(title) {
+  const item = { id: crypto.randomUUID(), title, completed: false }
+  items.unshift(item)
+  saveItems()
+  render()
+  return {
+    item: { ...item },
+    pendingCount: items.filter(candidate => !candidate.completed).length,
+    totalCount: items.length,
+  }
+}
+
 function render() {
   list.replaceChildren()
   for (const item of items) {
@@ -61,12 +73,12 @@ form.addEventListener('submit', event => {
   event.preventDefault()
   const title = titleInput.value.trim()
   if (!title) return
-  items.unshift({ id: crypto.randomUUID(), title, completed: false })
+  createTodo(title)
   titleInput.value = ''
-  saveItems()
-  render()
   titleInput.focus()
 })
+
+window.agent.tools.createTodo = async ({ title }) => createTodo(title.trim())
 
 document.querySelector('#open-agent').addEventListener('click', () => {
   void window.hxsyApp.openAgentPanel()

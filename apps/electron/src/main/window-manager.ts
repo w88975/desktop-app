@@ -13,6 +13,8 @@ import { APP_PLATFORM_CHANNELS, type SurfaceKind } from '../shared/app-platform'
 import type { SurfaceRegistration } from '../shared/app-platform'
 import { ShellViewManager } from './shell-view-manager'
 import type { ExternalAppRegistry } from './external-app-registry'
+import { buildInstalledAppSummaries } from './internal-app-registry'
+import type { AppCatalogItem, AppTabActionResult } from '@craft-agent/session-tools-core'
 import { isSettingsShortcut } from './settings-shortcut'
 
 // Vite dev server URL for hot reload
@@ -73,6 +75,61 @@ export class WindowManager {
   private settingsWindowFactory: (() => Promise<BrowserWindow | null>) | null = null
 
   constructor(private readonly externalAppRegistry: ExternalAppRegistry) {}
+
+  async listAppsForAgent(_workspaceId: string): Promise<AppCatalogItem[]> {
+    return buildInstalledAppSummaries(this.externalAppRegistry.list()).map(app => ({
+      appId: app.appId,
+      title: app.title,
+      description: app.description,
+      version: app.version,
+      kind: app.kind,
+      sourceType: app.sourceType,
+      status: app.status,
+      functions: app.webTools.map(tool => ({
+        name: tool.name,
+        description: tool.description,
+        handler: tool.handler,
+        inputSchema: tool.inputSchema,
+      })),
+    }))
+  }
+
+  async openAppForAgent(workspaceId: string, appId: string): Promise<AppTabActionResult> {
+    const window = this.getPreferredWindowForWorkspace(workspaceId) ?? this.focusOrCreateWindow(workspaceId)
+    const manager = this.shellViews.get(window.webContents.id)
+    if (!manager) throw new Error(`App shell unavailable for workspace ${workspaceId}`)
+    const result = manager.openApp(appId)
+    if (window.isMinimized()) window.restore()
+    window.focus()
+    return result
+  }
+
+  async closeAppForAgent(workspaceId: string, appId: string): Promise<AppTabActionResult> {
+    const window = this.getPreferredWindowForWorkspace(workspaceId)
+    if (!window) return { appId, status: 'not-open' }
+    const manager = this.shellViews.get(window.webContents.id)
+    if (!manager) return { appId, status: 'not-open' }
+    return manager.closeApp(appId)
+  }
+
+  async callWebToolForAgent(
+    workspaceId: string,
+    appId: string,
+    functionName: string,
+    args: Record<string, unknown>,
+  ): Promise<unknown> {
+    const window = this.getPreferredWindowForWorkspace(workspaceId)
+    if (!window) throw new Error(`No desktop window is open for workspace ${workspaceId}`)
+    const manager = this.shellViews.get(window.webContents.id)
+    if (!manager) throw new Error(`App shell unavailable for workspace ${workspaceId}`)
+    return manager.callWebTool(appId, functionName, args)
+  }
+
+  private getPreferredWindowForWorkspace(workspaceId: string): BrowserWindow | null {
+    const focused = this.getFocusedWindow()
+    if (focused && this.getWorkspaceForWindow(focused.webContents.id) === workspaceId) return focused
+    return this.getWindowByWorkspace(workspaceId)
+  }
 
   broadcastShellThemePreferences(preferences: { mode: string; colorTheme: string; font: string }): void {
     for (const { window } of this.windows.values()) {

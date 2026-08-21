@@ -63,6 +63,7 @@ export type { BrowserPaneFns } from './browser-tools.ts';
 // Re-export for all downstream consumers (index.ts, claude-agent.ts, pi-agent.ts, etc.)
 export {
   type SessionScopedToolCallbacks,
+  type AppControllerFns,
   registerSessionScopedToolCallbacks,
   mergeSessionScopedToolCallbacks,
   unregisterSessionScopedToolCallbacks,

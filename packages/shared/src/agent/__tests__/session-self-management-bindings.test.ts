@@ -215,6 +215,27 @@ describe('attachSessionSelfManagementBindings', () => {
     // No callbacks registered — resolveLabels should be undefined, not an identity function
     expect(ctx.resolveLabels).toBeUndefined();
   });
+
+  it('exposes late-registered desktop app controller callbacks', async () => {
+    const ctx = createBaseContext(sessionId);
+    attachSessionSelfManagementBindings(ctx, sessionId);
+    expect(ctx.listApps).toBeUndefined();
+    expect(ctx.callWebTool).toBeUndefined();
+
+    registerSessionScopedToolCallbacks(sessionId, {
+      appControllerFns: {
+        listApps: async () => [{ appId: 'todo', title: 'TODO', kind: 'built-in', status: 'ready', functions: [] }],
+        openApp: async appId => ({ appId, tabId: 'tab-1', status: 'opened' }),
+        closeApp: async appId => ({ appId, tabId: 'tab-1', status: 'closed' }),
+        callWebTool: async (_appId, _functionName, args) => ({ echoed: args }),
+      },
+    });
+
+    expect((await ctx.listApps!())[0]?.appId).toBe('todo');
+    expect(await ctx.openApp!('todo')).toMatchObject({ status: 'opened' });
+    expect(await ctx.callWebTool!('todo', 'echo', { value: 1 })).toEqual({ echoed: { value: 1 } });
+    expect(await ctx.closeApp!('todo')).toMatchObject({ status: 'closed' });
+  });
 });
 
 // ============================================================
