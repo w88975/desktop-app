@@ -336,8 +336,9 @@ describe('ShellViewManager webview lifecycle', () => {
   })
 
   it('uses explicit Agent focus and queues commands/intents until renderer is ready', () => {
+    const window = createWindow()
     const manager = new ShellViewManager({
-      window: createWindow() as any,
+      window: window as any,
       workspaceId: 'ws-1',
       initialActiveTarget: 'home',
       externalAppRegistry: createExternalAppRegistry() as any,
@@ -347,6 +348,11 @@ describe('ShellViewManager webview lifecycle', () => {
 
     manager.toggleAgentPanel()
     expect(manager.getState().agentPanelVisible).toBe(true)
+    expect(() => manager.markAgentRendererReady(window.webContents.id)).not.toThrow()
+    expect(window.webContents.send).toHaveBeenCalledWith(
+      'app-platform:agent-presentation-changed',
+      expect.objectContaining({ presentation: 'panel' })
+    )
     manager.focusAgentTab({ type: 'conversation', sessionId: 'session-1' })
     expect(manager.getState()).toMatchObject({
       activeTarget: { kind: 'agent' },
@@ -367,6 +373,12 @@ describe('ShellViewManager webview lifecycle', () => {
 
     manager.sendAgentCommand('new-session')
     expect(agent.send).toHaveBeenCalledWith('app-platform:agent-command-received', 'new-session')
+
+    manager.dockAgentAsPanel({ type: 'conversation', sessionId: 'session-2' })
+    expect(window.webContents.send).toHaveBeenCalledWith(
+      'app-platform:agent-navigation-intent-received',
+      { type: 'conversation', sessionId: 'session-2' }
+    )
 
     agent.send.mockClear()
     agent.emit('did-start-navigation')

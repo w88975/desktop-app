@@ -3,17 +3,11 @@ import ReactDOM from 'react-dom/client'
 import { init as sentryInit } from '@sentry/electron/renderer'
 import * as Sentry from '@sentry/react'
 import { captureConsoleIntegration } from '@sentry/react'
-import { Provider as JotaiProvider, useAtomValue } from 'jotai'
-import App from './App'
-import { ThemeProvider } from './context/ThemeContext'
-import { windowWorkspaceIdAtom } from './atoms/sessions'
-import { Toaster } from '@/components/ui/sonner'
 import { setupI18n, i18n } from '@craft-agent/shared/i18n'
 import { initReactI18next } from 'react-i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
 import './index.css'
-import { AgentPresentationProvider } from './context/AgentPresentationContext'
-import { AuthProvider } from './context/AuthContext'
+import { AgentRendererRoot } from './agent-renderer-root'
 
 // Initialize i18n before any React rendering
 setupI18n([LanguageDetector, initReactI18next])
@@ -112,32 +106,14 @@ function CrashFallback() {
   )
 }
 
-/**
- * Root component - loads workspace ID for theme context and renders App
- * App.tsx handles window mode detection internally (main vs tab-content)
- */
-function Root() {
-  // Shared atom — written by App on init & workspace switch, read here for ThemeProvider
-  const workspaceId = useAtomValue(windowWorkspaceIdAtom)
-
-  return (
-    <ThemeProvider activeWorkspaceId={workspaceId}>
-      <App />
-      <Toaster />
-    </ThemeProvider>
-  )
-}
-
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <Sentry.ErrorBoundary fallback={<CrashFallback />}>
-      <JotaiProvider>
-        <AuthProvider>
-          <AgentPresentationProvider>
-            <Root />
-          </AgentPresentationProvider>
-        </AuthProvider>
-      </JotaiProvider>
+      <AgentRendererRoot
+        forcePresentation={new URLSearchParams(window.location.search).get('surface') === 'agent-full'
+          ? 'full'
+          : undefined}
+      />
     </Sentry.ErrorBoundary>
   </React.StrictMode>
 )

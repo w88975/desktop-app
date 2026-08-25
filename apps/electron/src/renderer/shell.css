@@ -20,7 +20,14 @@ body {
   color: var(--foreground);
 }
 
-button { font: inherit; color: inherit; }
+/* Keep Shell chrome native-button resets away from embedded Agent Panel.
+   Unlayered Shell CSS outranks Tailwind layers; a global button reset would
+   erase Agent text-size/font-weight/text-color utilities and currentColor SVGs. */
+.titlebar button,
+.app-status-surface button {
+  font: inherit;
+  color: inherit;
+}
 
 .titlebar {
   position: relative;
@@ -223,6 +230,20 @@ button { font: inherit; color: inherit; }
   background: var(--shell-background);
 }
 
+/* Keep resize pointer events in shell renderer. Electron <webview> guests can
+   otherwise consume pointerup, leaving shell resize state stuck. */
+html[data-resizing="true"] .surface-layout::after {
+  content: "";
+  position: absolute;
+  z-index: 19;
+  inset: 0;
+  cursor: col-resize;
+}
+
+html[data-resizing="true"] {
+  user-select: none;
+}
+
 .app-region {
   position: absolute;
   inset: var(--app-region-inset);
@@ -359,6 +380,27 @@ html[data-resizing="true"] .app-region {
 }
 
 .agent-surface.agent-panel-visible {
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.agent-panel-host {
+  position: absolute;
+  top: var(--app-region-inset);
+  right: var(--panel-edge-inset);
+  bottom: var(--app-region-inset);
+  width: var(--agent-panel-width);
+  z-index: 10;
+  contain: paint;
+  overflow: hidden;
+  border-radius: var(--radius-inner) var(--radius-inner) var(--radius-edge) var(--radius-edge);
+  background: var(--background);
+  box-shadow: var(--shadow-middle);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.agent-panel-host.agent-panel-host-visible {
   visibility: visible;
   pointer-events: auto;
 }

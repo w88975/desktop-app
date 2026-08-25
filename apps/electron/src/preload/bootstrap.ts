@@ -431,7 +431,7 @@ client.onConnectionStateChanged((state) => {
 }
 ;(api as ElectronAPI).focusAgentTab = (intent?: AgentNavigationIntent) => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.FOCUS_AGENT_TAB, intent)
 ;(api as ElectronAPI).unfocusAgentTab = () => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.UNFOCUS_AGENT_TAB)
-;(api as ElectronAPI).dockAgentAsPanel = () => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.DOCK_AGENT_AS_PANEL)
+;(api as ElectronAPI).dockAgentAsPanel = (intent?: AgentNavigationIntent) => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.DOCK_AGENT_AS_PANEL, intent)
 ;(api as ElectronAPI).toggleAgentPanel = () => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.TOGGLE_AGENT_PANEL)
 ;(api as ElectronAPI).openSettings = (subpage) => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.OPEN_SETTINGS, subpage)
 ;(api as ElectronAPI).onAgentShellCommand = (callback: (command: AgentShellCommand) => void) => {

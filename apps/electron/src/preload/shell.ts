@@ -1,3 +1,4 @@
+import './bootstrap'
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   APP_PLATFORM_CHANNELS,
@@ -6,7 +7,6 @@ import {
   type ShellState,
   type WebviewSurfaceBootstrap,
 } from '../shared/app-platform'
-import { createAuthAPI } from './auth-bridge'
 
 const api: ShellAPI = {
   getState: () => ipcRenderer.invoke(APP_PLATFORM_CHANNELS.GET_STATE),
@@ -29,16 +29,3 @@ const api: ShellAPI = {
 }
 
 contextBridge.exposeInMainWorld('shellAPI', api)
-contextBridge.exposeInMainWorld('authAPI', createAuthAPI())
-contextBridge.exposeInMainWorld('electronAPI', {
-  onThemePreferencesChange: (callback: (preferences: { mode: string; colorTheme: string; font: string }) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, preferences: { mode: string; colorTheme: string; font: string }) => callback(preferences)
-    ipcRenderer.on(APP_PLATFORM_CHANNELS.THEME_PREFERENCES_CHANGED, listener)
-    return () => ipcRenderer.removeListener(APP_PLATFORM_CHANNELS.THEME_PREFERENCES_CHANGED, listener)
-  },
-  onWorkspaceThemeChange: (callback: (data: { workspaceId: string; themeId: string | null }) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, data: { workspaceId: string; themeId: string | null }) => callback(data)
-    ipcRenderer.on(APP_PLATFORM_CHANNELS.WORKSPACE_THEME_CHANGED, listener)
-    return () => ipcRenderer.removeListener(APP_PLATFORM_CHANNELS.WORKSPACE_THEME_CHANGED, listener)
-  },
-})

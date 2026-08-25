@@ -650,7 +650,7 @@ const ChatPage = React.memo(function ChatPage({ sessionId }: ChatPageProps) {
       onClick={() => {
         void (isPanel
           ? openFullView({ type: 'conversation', sessionId })
-          : dockAsPanel())
+          : dockAsPanel({ type: 'conversation', sessionId }))
       }}
     />
   ), [dockAsPanel, isPanel, openFullView, sessionId])

@@ -326,7 +326,7 @@ export interface ElectronAPI {
   onAgentPresentationChanged(callback: (state: AgentPresentationState) => void): () => void
   focusAgentTab(intent?: AgentNavigationIntent): Promise<void>
   unfocusAgentTab(): Promise<void>
-  dockAgentAsPanel(): Promise<void>
+  dockAgentAsPanel(intent?: AgentNavigationIntent): Promise<void>
   toggleAgentPanel(): Promise<void>
   openSettings(subpage?: SettingsSubpage): Promise<void>
   onAgentShellCommand(callback: (command: AgentShellCommand) => void): () => void

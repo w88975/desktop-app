@@ -11,6 +11,10 @@ import { CraftAgentsSymbol } from './components/icons/CraftAgentsSymbol'
 import { SquarePenRounded } from './components/icons/SquarePenRounded'
 import { TopBarButton } from './components/ui/TopBarButton'
 import { ThemeProvider } from './context/ThemeContext'
+import { AgentRendererRoot } from './agent-renderer-root'
+import { setupI18n } from '@craft-agent/shared/i18n'
+import { initReactI18next } from 'react-i18next'
+import LanguageDetector from 'i18next-browser-languagedetector'
 import { useResizeGradient } from './hooks/useResizeGradient'
 import {
   PANEL_EDGE_INSET,
@@ -24,8 +28,15 @@ import {
 import './index.css'
 import './shell.css'
 
+setupI18n([LanguageDetector, initReactI18next])
+
 const APP_REGION_INSET = 8
 const DISMISS_SHELL_OVERLAYS_EVENT = 'shell-dismiss-overlays'
+const SHELL_RESIZING_DATA_KEY = 'resizing'
+
+function stopShellResize(): void {
+  delete document.documentElement.dataset[SHELL_RESIZING_DATA_KEY]
+}
 
 const EMPTY_STATE: ShellState = {
   activeTarget: { kind: 'home' },
@@ -156,10 +167,15 @@ function ShellResizeSash({ panelWidth }: { panelWidth: number }) {
       onMouseMove={handlers.onMouseMove}
       onMouseLeave={handlers.onMouseLeave}
       onPointerDown={(event) => {
+        if (event.button !== 0) return
+        event.preventDefault()
         handlers.onMouseDown()
-        document.documentElement.dataset.resizing = 'true'
+        document.documentElement.dataset[SHELL_RESIZING_DATA_KEY] = 'true'
         event.currentTarget.setPointerCapture(event.pointerId)
       }}
+      onPointerUp={stopShellResize}
+      onPointerCancel={stopShellResize}
+      onLostPointerCapture={stopShellResize}
       onDoubleClick={() => {
         void window.shellAPI.setPanelWidth(window.innerWidth * AGENT_PANEL_DEFAULT_RATIO)
       }}
@@ -192,15 +208,32 @@ function Shell() {
   useEffect(() => {
     if (!state.agentPanelVisible) return
     const onPointerMove = (event: PointerEvent) => {
-      if (document.documentElement.dataset.resizing !== 'true') return
+      if (document.documentElement.dataset[SHELL_RESIZING_DATA_KEY] !== 'true') return
+      // Chromium can lose pointer capture at a <webview> process boundary. If
+      // button state says primary button is already up, terminate stale drag.
+      if ((event.buttons & 1) === 0) {
+        stopShellResize()
+        return
+      }
       void window.shellAPI.setPanelWidth(window.innerWidth - event.clientX)
     }
-    const stop = () => { delete document.documentElement.dataset.resizing }
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') stopShellResize()
+    }
     window.addEventListener('pointermove', onPointerMove)
-    window.addEventListener('pointerup', stop)
+    window.addEventListener('pointerup', stopShellResize)
+    window.addEventListener('pointercancel', stopShellResize)
+    window.addEventListener('mouseup', stopShellResize)
+    window.addEventListener('blur', stopShellResize)
+    document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
       window.removeEventListener('pointermove', onPointerMove)
-      window.removeEventListener('pointerup', stop)
+      window.removeEventListener('pointerup', stopShellResize)
+      window.removeEventListener('pointercancel', stopShellResize)
+      window.removeEventListener('mouseup', stopShellResize)
+      window.removeEventListener('blur', stopShellResize)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      stopShellResize()
     }
   }, [state.agentPanelVisible])
 
@@ -217,8 +250,6 @@ function Shell() {
 
   const panelVisible = state.agentPanelVisible
   const fullVisible = state.activeTarget.kind === 'agent'
-  // Hidden Agent 保持 Full bounds；再次 focus Agent tab 时不会先绘制窄版布局。
-  const fullSized = !panelVisible
   const activeContentTabId = getActiveContentTabId(state)
   const animatePanelTransition = !fullVisible
     && !previousFullVisibleRef.current
@@ -226,6 +257,11 @@ function Shell() {
   const agentButtonLabel = fullVisible
     ? 'Exit Agent full view'
     : panelVisible ? 'Close Agent panel' : 'Open Agent panel'
+
+  useEffect(() => {
+    if (panelVisible) return
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  }, [panelVisible])
 
   const handleTabListKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
@@ -392,9 +428,16 @@ function Shell() {
             src={bootstrap.agentSrc}
             preload={bootstrap.agentPreload}
             ariaLabel="Agent"
-            className={`surface-webview agent-surface ${fullSized ? 'agent-full-sized' : ''} ${panelVisible ? 'agent-panel-visible' : ''} ${fullVisible ? 'agent-full-visible' : ''}`}
+            className={`surface-webview agent-surface agent-full-sized ${fullVisible ? 'agent-full-visible' : ''}`}
           />
         )}
+
+        <div
+          className={`agent-panel-host ${panelVisible ? 'agent-panel-host-visible' : ''}`}
+          aria-hidden={!panelVisible}
+        >
+          <AgentRendererRoot forcePresentation="panel" showToaster={false} />
+        </div>
 
         {panelVisible && (
           <ShellResizeSash panelWidth={state.agentPanelWidthPx} />

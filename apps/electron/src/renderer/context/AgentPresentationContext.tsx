@@ -1,5 +1,5 @@
 import React from 'react'
-import type { AgentNavigationIntent, AgentPresentationState } from '../../shared/app-platform'
+import type { AgentNavigationIntent, AgentPresentation, AgentPresentationState } from '../../shared/app-platform'
 
 const FALLBACK_STATE: AgentPresentationState = {
   presentation: 'full',
@@ -11,7 +11,7 @@ interface AgentPresentationContextValue {
   isPanel: boolean
   isFull: boolean
   openFullView(intent?: AgentNavigationIntent): Promise<void>
-  dockAsPanel(): Promise<void>
+  dockAsPanel(intent?: AgentNavigationIntent): Promise<void>
   closePanel(): Promise<void>
 }
 
@@ -24,7 +24,13 @@ const AgentPresentationContext = React.createContext<AgentPresentationContextVal
   closePanel: async () => {},
 })
 
-export function AgentPresentationProvider({ children }: { children: React.ReactNode }) {
+export function AgentPresentationProvider({
+  children,
+  forcePresentation,
+}: {
+  children: React.ReactNode
+  forcePresentation?: AgentPresentation
+}) {
   const [state, setState] = React.useState(FALLBACK_STATE)
 
   React.useEffect(() => {
@@ -34,14 +40,18 @@ export function AgentPresentationProvider({ children }: { children: React.ReactN
     return api.onAgentPresentationChanged(setState)
   }, [])
 
+  const effectiveState = React.useMemo<AgentPresentationState>(() => forcePresentation
+    ? { ...state, presentation: forcePresentation }
+    : state, [forcePresentation, state])
+
   const value = React.useMemo<AgentPresentationContextValue>(() => ({
-    state,
-    isPanel: state.presentation === 'panel',
-    isFull: state.presentation === 'full',
+    state: effectiveState,
+    isPanel: effectiveState.presentation === 'panel',
+    isFull: effectiveState.presentation === 'full',
     openFullView: (intent) => window.electronAPI.focusAgentTab(intent),
-    dockAsPanel: () => window.electronAPI.dockAgentAsPanel(),
+    dockAsPanel: (intent) => window.electronAPI.dockAgentAsPanel(intent),
     closePanel: () => window.electronAPI.toggleAgentPanel(),
-  }), [state])
+  }), [effectiveState])
 
   return <AgentPresentationContext.Provider value={value}>{children}</AgentPresentationContext.Provider>
 }

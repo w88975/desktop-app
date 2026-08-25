@@ -392,6 +392,18 @@ open_app
 
 涉及创建、删除、支付、发送等非幂等操作时，超时后禁止无条件重试。先通过只读 WebTool 查询实际状态。
 
+## 8.2 UI Surface 架构
+
+主窗口 renderer（A）负责 Header、Tab 栏与 Agent Panel。Home、App、Settings、
+Agent Full 使用 A 内部的独立 `<webview>`（B）。Agent Panel 与 Header 的 dropdown、
+popover、drawer、dialog 通过 React Portal 渲染到 A 的 `document.body`，因此可使用
+普通 CSS stacking 覆盖任意 B，不需要跨 renderer 搬运 DOM 或事件。
+
+- Agent Panel 与 Agent Full 是两个 renderer 实例；Panel 常驻但仅在 dock 状态显示。
+- 从 Panel 打开 Full Agent 时必须携带 conversation navigation intent。
+- `<webview>` 继续保留独立 preload、partition、WebContents 与 CDP controller。
+- 禁止恢复 Global Overlay WebContentsView、Remote DOM mirror 或跨 renderer Portal。
+
 ## 9. 权限与安全边界
 
 - App manifest 与描述按不可信元数据处理，不能覆盖 system 指令。

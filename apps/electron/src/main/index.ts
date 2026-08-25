@@ -637,8 +637,8 @@ app.whenReady().then(async () => {
     ipcMain.handle(APP_PLATFORM_CHANNELS.UNFOCUS_AGENT_TAB, event =>
       getShellViews(event.sender.id, ['shell', 'agent']).unfocusAgentTab()
     )
-    ipcMain.handle(APP_PLATFORM_CHANNELS.DOCK_AGENT_AS_PANEL, event =>
-      getShellViews(event.sender.id, ['agent']).dockAgentAsPanel()
+    ipcMain.handle(APP_PLATFORM_CHANNELS.DOCK_AGENT_AS_PANEL, (event, intent) =>
+      getShellViews(event.sender.id, ['agent']).dockAgentAsPanel(intent)
     )
     ipcMain.handle(APP_PLATFORM_CHANNELS.SET_PANEL_WIDTH, (event, widthPx: number) =>
       getShellViews(event.sender.id, ['shell']).setPanelWidth(widthPx)
@@ -647,7 +647,7 @@ app.whenReady().then(async () => {
       getShellViews(event.sender.id, ['shell']).sendAgentCommand(command)
     )
     ipcMain.handle(APP_PLATFORM_CHANNELS.AGENT_RENDERER_READY, event =>
-      getShellViews(event.sender.id, ['agent']).markAgentRendererReady(event.sender.id)
+      getShellViews(event.sender.id, ['shell', 'agent']).markAgentRendererReady(event.sender.id)
     )
     ipcMain.handle(APP_PLATFORM_CHANNELS.LIST_INSTALLED_APPS, event =>
       getShellViews(event.sender.id, ['home']).getInstalledApps()

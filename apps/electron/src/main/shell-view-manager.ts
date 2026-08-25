@@ -81,9 +81,11 @@ export class ShellViewManager {
   private readonly pendingGuestDescriptors: GuestDescriptor[] = []
   private readonly queuedAgentCommands: AgentShellCommand[] = []
   private readonly queuedAgentNavigationIntents: AgentNavigationIntent[] = []
+  private readonly queuedAgentPanelNavigationIntents: AgentNavigationIntent[] = []
   private readonly tabManager: ShellTabManager
   private agentWebContents: WebContents | null = null
   private agentRendererReady = false
+  private agentPanelRendererReady = false
   private homeWebContents: WebContents | null = null
   private settingsWebContents: WebContents | null = null
   private lastSettingsSubpage: SettingsSubpage = 'app'
@@ -116,7 +118,7 @@ export class ShellViewManager {
     if (VITE_DEV_SERVER_URL) {
       const agent = new URL('/index.html', VITE_DEV_SERVER_URL)
       agent.searchParams.set('workspaceId', this.workspaceId)
-      agent.searchParams.set('surface', 'agent')
+      agent.searchParams.set('surface', 'agent-full')
       return {
         agentSrc: agent.toString(),
         agentPreload: bootstrapPreload,
@@ -130,7 +132,7 @@ export class ShellViewManager {
 
     const agent = pathToFileURL(join(__dirname, 'renderer/index.html'))
     agent.searchParams.set('workspaceId', this.workspaceId)
-    agent.searchParams.set('surface', 'agent')
+    agent.searchParams.set('surface', 'agent-full')
     return {
       agentSrc: agent.toString(),
       agentPreload: bootstrapPreload,
@@ -183,7 +185,7 @@ export class ShellViewManager {
         }
       }
 
-      if (parsed.pathname === agentEntry.pathname && parsed.searchParams.get('surface') === 'agent') {
+      if (parsed.pathname === agentEntry.pathname && parsed.searchParams.get('surface') === 'agent-full') {
         if (parsed.searchParams.get('workspaceId') !== this.workspaceId) return null
         return { kind: 'agent', preload: bootstrap.agentPreload }
       }
@@ -783,9 +785,19 @@ export class ShellViewManager {
     this.emitAllState()
   }
 
-  dockAgentAsPanel(): void {
+  dockAgentAsPanel(intent?: AgentNavigationIntent): void {
+    if (intent && (intent.type !== 'conversation' || !intent.sessionId.trim())) {
+      throw new Error('Invalid Agent navigation intent')
+    }
     this.tabManager.dockAgentAsPanel()
     this.emitAllState()
+    if (!intent) return
+    if (this.window.webContents.isDestroyed()) return
+    if (this.agentPanelRendererReady) {
+      this.window.webContents.send(APP_PLATFORM_CHANNELS.AGENT_NAVIGATION_INTENT_RECEIVED, intent)
+    } else {
+      this.queuedAgentPanelNavigationIntents.push(intent)
+    }
   }
 
   openAgentPanel(): void {
@@ -814,6 +826,13 @@ export class ShellViewManager {
   }
 
   markAgentRendererReady(webContentsId: number): void {
+    if (this.window.webContents.id === webContentsId && !this.window.webContents.isDestroyed()) {
+      this.agentPanelRendererReady = true
+      for (const intent of this.queuedAgentPanelNavigationIntents.splice(0)) {
+        this.window.webContents.send(APP_PLATFORM_CHANNELS.AGENT_NAVIGATION_INTENT_RECEIVED, intent)
+      }
+      return
+    }
     if (!this.agentWebContents || this.agentWebContents.id !== webContentsId || this.agentWebContents.isDestroyed()) {
       throw new Error(`Unknown Agent renderer: ${webContentsId}`)
     }
@@ -891,6 +910,12 @@ export class ShellViewManager {
   }
 
   private emitAgentPresentation(): void {
+    if (!this.window.isDestroyed() && !this.window.webContents.isDestroyed()) {
+      this.window.webContents.send(
+        APP_PLATFORM_CHANNELS.AGENT_PRESENTATION_CHANGED,
+        deriveAgentPresentationState(this.getState())
+      )
+    }
     if (this.agentWebContents && !this.agentWebContents.isDestroyed()) {
       this.agentWebContents.send(
         APP_PLATFORM_CHANNELS.AGENT_PRESENTATION_CHANGED,
@@ -931,8 +956,10 @@ export class ShellViewManager {
     this.managedTabs.clear()
     this.queuedAgentCommands.length = 0
     this.queuedAgentNavigationIntents.length = 0
+    this.queuedAgentPanelNavigationIntents.length = 0
     this.agentWebContents = null
     this.agentRendererReady = false
+    this.agentPanelRendererReady = false
     this.homeWebContents = null
     this.settingsWebContents = null
   }

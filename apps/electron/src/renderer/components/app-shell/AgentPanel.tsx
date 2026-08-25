@@ -49,13 +49,15 @@ export function AgentPanel() {
     <div
       data-agent-presentation="panel"
       data-agent-component="panel"
-      className="h-full w-full overflow-hidden bg-background"
+      className="h-full w-full min-w-0 overflow-hidden bg-background @container/shell"
     >
       <AppShellProvider value={panelContext}>
-        <MainContentPanel
-          navStateOverride={navState}
-          isSidebarAndNavigatorHidden
-        />
+        <div className="h-full w-full min-w-0 overflow-hidden @container/panel">
+          <MainContentPanel
+            navStateOverride={navState}
+            isSidebarAndNavigatorHidden
+          />
+        </div>
       </AppShellProvider>
     </div>
   )
