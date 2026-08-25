@@ -100,6 +100,7 @@ import { setSearchPlatform, setImageProcessor } from '@craft-agent/server-core/s
 import { createApplicationMenu } from './menu'
 import { WindowManager } from './window-manager'
 import { AuthService } from './auth-service'
+import { syncPlatformModelConfig } from './platform-model-config'
 import { AuthWindowController } from './auth-window'
 import { loadWindowState, saveWindowState } from './window-state'
 import { getWorkspaces, getWorkspaceByNameOrId, loadStoredConfig, addWorkspace, saveConfig } from '@craft-agent/shared/config'
@@ -413,6 +414,14 @@ function requestAuthenticatedMainWindow(): void {
   mainWindowOpenPending = false
 }
 
+async function refreshPlatformModelConfig(): Promise<void> {
+  const service = assertAuthService()
+  await syncPlatformModelConfig({
+    request: input => service.authenticatedRequest(input),
+    credentials: getCredentialManager(),
+  })
+}
+
 function registerAuthIpc(): void {
   ipcMain.handle(AUTH_CHANNELS.GET_STATE, event => {
     if (!isAuthConsumer(event.sender.id, true)) throw new Error('Unauthorized Auth consumer')
@@ -425,6 +434,11 @@ function registerAuthIpc(): void {
   ipcMain.handle(AUTH_CHANNELS.LOGIN, async (event, phone: string, code: string) => {
     if (!authWindowController?.isSender(event.sender.id)) throw new Error('Unauthorized Auth consumer')
     const state = await assertAuthService().login(phone, code)
+    try {
+      await refreshPlatformModelConfig()
+    } catch (error) {
+      mainLog.warn('Failed to refresh platform model config after login:', error instanceof Error ? error.message : String(error))
+    }
     setTimeout(requestAuthenticatedMainWindow, 0)
     return state
   })
@@ -559,8 +573,15 @@ app.whenReady().then(async () => {
         }
       })
       authWindowController.show()
-      void authService.initialize().then(state => {
-        if (state.status === 'authenticated') requestAuthenticatedMainWindow()
+      void authService.initialize().then(async state => {
+        if (state.status === 'authenticated') {
+          try {
+            await refreshPlatformModelConfig()
+          } catch (error) {
+            mainLog.warn('Failed to refresh platform model config after auth restore:', error instanceof Error ? error.message : String(error))
+          }
+          requestAuthenticatedMainWindow()
+        }
       }).catch(() => lockToAuthWindow())
     }
 
