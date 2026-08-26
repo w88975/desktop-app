@@ -419,7 +419,7 @@ describe('ShellViewManager webview lifecycle', () => {
     })
   })
 
-  it('hosts built-in browser as a multi-instance tab without privileged preload', () => {
+  it('hosts built-in browser as a multi-instance tab without privileged preload', async () => {
     const attached: Array<{ instanceId: string; contents: any; host: any }> = []
     const detached: Array<{ instanceId: string; webContentsId: number }> = []
     const browserTabs = {
@@ -471,6 +471,8 @@ describe('ShellViewManager webview lifecycle', () => {
     expect(guest.setWindowOpenHandler).not.toHaveBeenCalled()
     expect(attached).toHaveLength(1)
     expect(attached[0]).toMatchObject({ instanceId: 'browser-1', contents: guest })
+    await expect(manager.appBrowser('browser', 'navigate https://example.com'))
+      .rejects.toThrow('Use browser_tool')
 
     attached[0].host.update({
       id: 'browser-1',

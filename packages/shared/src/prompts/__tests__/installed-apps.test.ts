@@ -53,6 +53,20 @@ describe('installed apps prompt', () => {
     expect(prompt).toContain('"required": [')
   })
 
+  it('routes built-in Browser work away from app_browser', () => {
+    setInstalledAppsPromptProvider(() => [{
+      appId: 'browser',
+      kind: 'browser',
+      status: 'ready',
+      title: '浏览器',
+      webTools: [],
+    }])
+    const prompt = getInstalledAppsPrompt()
+    expect(prompt).toContain('never call `open_app`, `call_webtool`, or `app_browser`')
+    expect(prompt).toContain('Use `browser_tool`')
+    expect(prompt).toContain('`app_browser` intentionally has no `navigate` command')
+  })
+
   it('prevents manifest text from closing the metadata block', () => {
     setInstalledAppsPromptProvider(() => [{
       appId: 'unsafe',

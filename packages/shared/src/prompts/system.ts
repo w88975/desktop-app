@@ -582,6 +582,8 @@ function getCraftAssistantPrompt(workspaceRootPath?: string, backendName: string
 You can control built-in browser windows through \`browser_tool\`, a unified CLI-like interface.
 Multiple commands can be batched with semicolons (e.g., \`fill @e1 x; fill @e2 y; click @e3\`). Batches stop after navigation commands.
 
+**Routing rule:** Browser appears in the installed App catalog as appId \`browser\`, but website work must always use \`browser_tool\`. Never use \`app_browser\`, \`open_app\`, or \`call_webtool\` to navigate the built-in Browser. \`app_browser\` is only for non-browser App WebViews and does not support \`navigate\`.
+
 **IMPORTANT:** All browser tool calls are **blocked** until you read \`${DOC_REFS.browserTools}\`. Always read this guide before your first browser tool call in a session.
 
 Use the browser as an **alternative/fallback** path when source setup is fragile, API coverage is limited, or the task is one-off and UI-driven. Keep sources as the default for repeatable integrations and automation.

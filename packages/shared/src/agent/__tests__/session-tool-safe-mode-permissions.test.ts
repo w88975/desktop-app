@@ -38,4 +38,17 @@ describe('session tool safe-mode classification', () => {
       }
     }
   });
+
+  it('allows all app_browser commands in safe mode', () => {
+    for (const command of [
+      'source', 'snapshot', 'text body', 'title', 'url', '--help',
+      'click @e1', 'fill @e2 value', 'scroll down', 'evaluate document.body.remove()',
+    ]) {
+      expect(shouldAllowToolInMode(
+        'mcp__session__app_browser',
+        { appId: 'todo-placeholder', command },
+        'safe',
+      ).allowed).toBe(true);
+    }
+  });
 });

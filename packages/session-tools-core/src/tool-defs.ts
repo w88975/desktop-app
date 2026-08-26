@@ -264,7 +264,7 @@ export const CallWebToolSchema = z.object({
 });
 
 export const AppBrowserSchema = z.object({
-  appId: z.string().describe('Open App ID to inspect or control'),
+  appId: z.string().describe('Open non-browser App ID to inspect or control. Never pass "browser"; use browser_tool for the built-in Browser.'),
   command: z.union([z.string(), z.array(z.string())]).describe(
     'Browser-style command. Prefer array form when arguments contain spaces, quotes, or source code.'
   ),
@@ -578,7 +578,8 @@ Use this to discover appId values and callable function names. A WebTool entry i
 
   open_app: `Open or activate an app in the main desktop shell. The app appears in the same tab bar as when the user opens it from Home.
 
-Call list_apps first when appId is unknown. Opening an already-open singleton app activates its existing tab.`,
+Call list_apps first when appId is unknown. Opening an already-open singleton app activates its existing tab.
+Exception: do not use open_app for appId "browser" when browsing websites; browser_tool creates or reuses Browser Tabs itself.`,
 
   close_app: `Close an app tab in the main desktop shell, using the same lifecycle as the tab close button.
 
@@ -589,7 +590,11 @@ This destroys the app renderer. Call open_app again before any later call_webtoo
 Required flow: discover the app/function with list_apps (or <installed_apps>), open it with open_app, then call this tool using webTools[].name and arguments matching inputSchema.
 Only manifest-declared functions are allowed. The app must also register the mapped handler at runtime through window.agent.tools.<handler>.`,
 
-  app_browser: `Inspect and simulate user interaction inside an open App WebView.
+  app_browser: `Inspect and simulate user interaction inside an open non-browser App WebView.
+
+Never use app_browser with appId "browser". The built-in Browser is controlled exclusively through browser_tool, including navigate, snapshot, click, fill, and other website actions. app_browser intentionally has no navigate command.
+
+All app_browser commands are permitted in Explore mode, matching browser_tool behavior.
 
 Uses an agent-browser-style snapshot/ref loop. Required workflow: open_app → app_browser snapshot → interact with @eN refs → snapshot again after page changes.
 
@@ -700,7 +705,7 @@ export const SESSION_TOOL_DEFS: SessionToolDef[] = [
   { name: 'open_app', description: TOOL_DESCRIPTIONS.open_app, inputSchema: OpenAppSchema, executionMode: 'registry', safeMode: 'allow', handler: handleOpenApp },
   { name: 'close_app', description: TOOL_DESCRIPTIONS.close_app, inputSchema: CloseAppSchema, executionMode: 'registry', safeMode: 'block', handler: handleCloseApp },
   { name: 'call_webtool', description: TOOL_DESCRIPTIONS.call_webtool, inputSchema: CallWebToolSchema, executionMode: 'registry', safeMode: 'block', handler: handleCallWebTool },
-  { name: 'app_browser', description: TOOL_DESCRIPTIONS.app_browser, inputSchema: AppBrowserSchema, executionMode: 'registry', safeMode: 'block', handler: handleAppBrowser },
+  { name: 'app_browser', description: TOOL_DESCRIPTIONS.app_browser, inputSchema: AppBrowserSchema, executionMode: 'registry', safeMode: 'allow', handler: handleAppBrowser },
   // Main desktop shell tab controls (grouped in handlers/main-app-tools.ts)
   { name: 'main_app_list_tabs', description: TOOL_DESCRIPTIONS.main_app_list_tabs, inputSchema: MainAppListTabsSchema, executionMode: 'registry', safeMode: 'allow', readOnly: true, handler: handleMainAppListTabs },
   { name: 'main_app_switch_tab', description: TOOL_DESCRIPTIONS.main_app_switch_tab, inputSchema: MainAppSwitchTabSchema, executionMode: 'registry', safeMode: 'allow', handler: handleMainAppSwitchTab },

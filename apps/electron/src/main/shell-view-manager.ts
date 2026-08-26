@@ -681,6 +681,13 @@ export class ShellViewManager {
     const action = tokens.shift()?.toLowerCase()
     if (!action || action === '--help' || action === 'help') return getAppBrowserHelp()
 
+    if (managed.definition.kind === 'browser') {
+      throw new Error(
+        'app_browser does not control the built-in Browser. Use browser_tool with '
+        + '{"command":"navigate https://example.com"} (or another browser command).',
+      )
+    }
+
     const cdp = this.getAppBrowserController(contents)
     let result: unknown
 
