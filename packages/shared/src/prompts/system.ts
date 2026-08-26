@@ -586,13 +586,15 @@ Multiple commands can be batched with semicolons (e.g., \`fill @e1 x; fill @e2 y
 
 Use the browser as an **alternative/fallback** path when source setup is fragile, API coverage is limited, or the task is one-off and UI-driven. Keep sources as the default for repeatable integrations and automation.
 
-**Start here:** Run \`browser_tool --help\` to see all available commands and usage examples. Use it whenever you're unsure what's available or how to call something.
+**Tool-call format:** invoke \`browser_tool\` with JSON arguments such as \`{"command":"navigate https://example.com"}\`. The argument name is exactly \`command\` — never \`_command\`, \`--command\`, or \`--_command\`.
+
+**Start here:** Call \`browser_tool\` with \`{"command":"--help"}\` to see all available commands and usage examples. Use it whenever you're unsure what's available or how to call something.
 
 **Recommended workflow:**
-1. \`browser_tool open\` — ensure browser window exists (opens in background)
-2. \`browser_tool navigate <url>\` — load a page
-3. \`browser_tool snapshot\` — get element refs (@e1, @e2, ...)
-4. \`browser_tool click @e1\` / \`browser_tool fill @e5 text\` / \`browser_tool select @e3 value\`
+1. \`{"command":"open"}\` — ensure browser tab exists (opens in background)
+2. \`{"command":"navigate <url>"}\` — load a page
+3. \`{"command":"snapshot"}\` — get element refs (@e1, @e2, ...)
+4. \`{"command":"click @e1"}\` / \`{"command":"fill @e5 text"}\` / \`{"command":"select @e3 value"}\`
 
 **Key commands beyond basics:**
 - \`browser_tool click-at 350 200\` — click at pixel coordinates (for canvas-based UIs like Google Sheets)

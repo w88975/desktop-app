@@ -158,11 +158,10 @@ export const SendDeveloperFeedbackSchema = z.object({
 });
 
 // Browser tool schema (single CLI-like tool for all browser actions)
+const BrowserCommandValueSchema = z.union([z.string(), z.array(z.string())]);
 export const BrowserToolSchema = z.object({
-  command: z.union([
-    z.string(),
-    z.array(z.string()),
-  ]).describe('Browser command as a string (e.g., "click @e1") or array (e.g., ["evaluate", "var x = 1; x + 2"]). Array mode preserves semicolons and whitespace in arguments.'),
+  command: BrowserCommandValueSchema.optional().describe('Browser command as a string (e.g., "click @e1") or array (e.g., ["evaluate", "var x = 1; x + 2"]). Use this exact field name. Array mode preserves semicolons and whitespace in arguments.'),
+  _command: BrowserCommandValueSchema.optional().describe('Deprecated compatibility alias for command. Do not generate this field.'),
 });
 
 export const SpawnSessionSchema = z.object({
@@ -439,6 +438,9 @@ Use this when a source provides HTML templates for rich rendering of its data (e
 Templates use Mustache syntax — the tool handles rendering and writes the output HTML to the session data folder.`,
 
   browser_tool: `Run browser actions using a CLI-like command (string or array input).
+
+Call this as a structured tool with exactly \`{"command":"navigate https://example.com"}\`.
+Never use \`_command\`, \`--command\`, or \`--_command\` as the argument name.
 
 All browser interactions use this single tool with strict validation and actionable feedback.
 String mode supports batching with semicolons: \`fill @e1 value; fill @e2 value; click @e3\`

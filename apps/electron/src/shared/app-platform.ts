@@ -147,6 +147,10 @@ export const APP_PLATFORM_CHANNELS = {
   OPEN_SETTINGS: 'app-platform:open-settings',
   ACTIVATE_TAB: 'app-platform:activate-tab',
   CLOSE_TAB: 'app-platform:close-tab',
+  REORDER_TAB: 'app-platform:reorder-tab',
+  SET_TAB_ORDER: 'app-platform:set-tab-order',
+  CLOSE_TABS_RIGHT: 'app-platform:close-tabs-right',
+  CLOSE_OTHER_TABS: 'app-platform:close-other-tabs',
   TOGGLE_AGENT_PANEL: 'app-platform:toggle-agent-panel',
   FOCUS_AGENT_TAB: 'app-platform:focus-agent-tab',
   UNFOCUS_AGENT_TAB: 'app-platform:unfocus-agent-tab',
@@ -186,6 +190,10 @@ export interface ShellAPI {
   openSettings(subpage?: string): Promise<void>
   activateTab(tabId: string): Promise<void>
   closeTab(tabId: string): Promise<void>
+  reorderTab(tabId: string, targetTabId: string, placement: 'before' | 'after'): Promise<void>
+  setTabOrder(tabIds: string[]): Promise<void>
+  closeTabsRight(tabId: string): Promise<void>
+  closeOtherTabs(tabId: string): Promise<void>
   focusAgentTab(intent?: AgentNavigationIntent): Promise<void>
   toggleAgentPanel(): Promise<void>
   retryExternalApp(appId: string): Promise<void>

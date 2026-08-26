@@ -2,7 +2,7 @@
 
 Use `browser_tool` to control built-in browser windows (Chromium) inside Craft Agents.
 
-> **Quick start:** Run `browser_tool --help` to see all available commands and usage examples.
+> **Quick start:** Call `browser_tool({ command: "--help" })` to see all available commands and usage examples. Tool arguments must use the exact field name `command`; never `_command`, `--command`, or `--_command`.
 
 ## Browser usage paths
 

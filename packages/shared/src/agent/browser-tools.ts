@@ -181,6 +181,9 @@ export interface BrowserToolsOptions {
 
 const BROWSER_TOOL_DESCRIPTION = `Run browser actions using a CLI-like command (string or array input).
 
+Call this as a structured tool with exactly \`{"command":"navigate https://example.com"}\`.
+Never use \`_command\`, \`--command\`, or \`--_command\` as the argument name.
+
 All browser interactions use this single tool with strict validation and actionable feedback.
 String mode supports batching with semicolons: \`fill @e1 value; fill @e2 value; click @e3\`
 Batch stops after navigation commands (click, navigate, back, forward) since page state may change.
@@ -248,12 +251,17 @@ export function createBrowserTools(options: BrowserToolsOptions) {
         command: z.union([
           z.string(),
           z.array(z.string()),
-        ]).describe('Browser command as a string (e.g., "click @e1") or array (e.g., ["evaluate", "var x = 1; x + 2"]). Array mode preserves semicolons and whitespace in arguments.'),
+        ]).optional().describe('Browser command as a string or array. Use this exact field name.'),
+        _command: z.union([
+          z.string(),
+          z.array(z.string()),
+        ]).optional().describe('Deprecated compatibility alias for command. Do not generate this field.'),
       },
       async (args) => {
         try {
+          const command = args.command ?? args._command ?? '';
           const result = await executeBrowserToolCommand({
-            command: args.command,
+            command,
             fns: getBrowserFns(),
             sessionId: options.sessionId,
           });

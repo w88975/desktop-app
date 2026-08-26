@@ -979,6 +979,39 @@ export class ShellViewManager {
     this.applyTabEffects(transaction.effects)
   }
 
+  reorderTab(tabId: string, targetTabId: string, placement: 'before' | 'after'): void {
+    this.tabManager.reorderAppTab(tabId, targetTabId, placement)
+    this.emitState()
+  }
+
+  setTabOrder(tabIds: string[]): void {
+    this.tabManager.setAppTabOrder(tabIds)
+    this.emitState()
+  }
+
+  closeTabsRight(tabId: string): void {
+    const tabs = this.tabManager.getState().tabs
+    const index = tabs.findIndex(tab => tab.id === tabId)
+    if (index < 0) throw new Error(`Unknown app tab: ${tabId}`)
+    this.closeTabIds(tabs.slice(index + 1).map(tab => tab.id))
+  }
+
+  closeOtherTabs(tabId: string): void {
+    const tabs = this.tabManager.getState().tabs
+    if (!tabs.some(tab => tab.id === tabId)) throw new Error(`Unknown app tab: ${tabId}`)
+    this.closeTabIds(tabs.filter(tab => tab.id !== tabId).map(tab => tab.id))
+  }
+
+  private closeTabIds(tabIds: readonly string[]): void {
+    if (tabIds.length === 0) return
+    const effects: ShellTabEffect[] = []
+    for (const tabId of tabIds) {
+      effects.push(...this.tabManager.closeAppTab(tabId).effects)
+    }
+    this.emitAllState()
+    this.applyTabEffects(effects)
+  }
+
   toggleAgentPanel(): void {
     this.tabManager.toggleAgentPanel()
     this.emitAllState()

@@ -10,6 +10,12 @@ import {
 import { CraftAgentsSymbol } from './components/icons/CraftAgentsSymbol'
 import { SquarePenRounded } from './components/icons/SquarePenRounded'
 import { TopBarButton } from './components/ui/TopBarButton'
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  StyledContextMenuContent,
+  StyledContextMenuItem,
+} from './components/ui/styled-context-menu'
 import { ThemeProvider } from './context/ThemeContext'
 import { AgentRendererRoot } from './agent-renderer-root'
 import { setupI18n } from '@craft-agent/shared/i18n'
@@ -33,6 +39,24 @@ setupI18n([LanguageDetector, initReactI18next])
 const APP_REGION_INSET = 8
 const DISMISS_SHELL_OVERLAYS_EVENT = 'shell-dismiss-overlays'
 const SHELL_RESIZING_DATA_KEY = 'resizing'
+
+interface TabPointerDragRuntime {
+  pointerId: number
+  startX: number
+  sourceIndex: number
+  targetIndex: number
+  order: string[]
+  rects: DOMRect[]
+  moved: boolean
+}
+
+interface TabPointerDragVisual {
+  tabId: string
+  sourceIndex: number
+  targetIndex: number
+  offsetX: number
+  dragWidth: number
+}
 
 function stopShellResize(): void {
   delete document.documentElement.dataset[SHELL_RESIZING_DATA_KEY]
@@ -269,6 +293,20 @@ function Shell() {
   const [state, setState] = useState<ShellState>(EMPTY_STATE)
   const [bootstrap, setBootstrap] = useState<WebviewSurfaceBootstrap | null>(null)
   const tabsRef = useRef<HTMLDivElement | null>(null)
+  const surfaceOrderRef = useRef<string[]>([])
+  const contextMenuContentRef = useRef<HTMLDivElement | null>(null)
+  const tabDragRuntimeRef = useRef<TabPointerDragRuntime | null>(null)
+  const suppressTabClickRef = useRef(false)
+  const [tabDrag, setTabDrag] = useState<TabPointerDragVisual | null>(null)
+  const [optimisticTabOrder, setOptimisticTabOrder] = useState<string[] | null>(null)
+  const [contextMenuOpenTabId, setContextMenuOpenTabId] = useState<string | null>(null)
+
+  const closeTabContextMenu = () => {
+    contextMenuContentRef.current?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    )
+    setContextMenuOpenTabId(null)
+  }
   const previousPanelVisibleRef = useRef(false)
   const previousFullVisibleRef = useRef(false)
 
@@ -326,6 +364,24 @@ function Shell() {
     }
   }, [bootstrap, state.tabs])
 
+  const surfaceTabs = useMemo(() => {
+    const byId = new Map(state.tabs.map(tab => [tab.id, tab]))
+    surfaceOrderRef.current = surfaceOrderRef.current.filter(tabId => byId.has(tabId))
+    for (const tab of state.tabs) {
+      if (!surfaceOrderRef.current.includes(tab.id)) surfaceOrderRef.current.push(tab.id)
+    }
+    return surfaceOrderRef.current.map(tabId => byId.get(tabId)!).filter(Boolean)
+  }, [state.tabs])
+
+  const displayedTabs = useMemo(() => {
+    if (!optimisticTabOrder) return state.tabs
+    const byId = new Map(state.tabs.map(tab => [tab.id, tab]))
+    if (optimisticTabOrder.length !== state.tabs.length || optimisticTabOrder.some(tabId => !byId.has(tabId))) {
+      return state.tabs
+    }
+    return optimisticTabOrder.map(tabId => byId.get(tabId)!)
+  }, [optimisticTabOrder, state.tabs])
+
   const panelVisible = state.agentPanelVisible
   const fullVisible = state.activeTarget.kind === 'agent'
   const activeContentTabId = getActiveContentTabId(state)
@@ -367,12 +423,40 @@ function Shell() {
     return () => cancelAnimationFrame(frame)
   }, [state.activeTarget, state.tabs.length])
 
+  useEffect(() => {
+    if (!optimisticTabOrder) return
+    const stateOrder = state.tabs.map(tab => tab.id)
+    if (stateOrder.length !== optimisticTabOrder.length) {
+      setOptimisticTabOrder(null)
+      return
+    }
+    if (stateOrder.every((tabId, index) => tabId === optimisticTabOrder[index])) {
+      setOptimisticTabOrder(null)
+    }
+  }, [optimisticTabOrder, state.tabs])
+
+  const getTabDragTransform = (tabId: string, index: number): React.CSSProperties | undefined => {
+    if (!tabDrag) return undefined
+    if (tabId === tabDrag.tabId) {
+      return { transform: `translate3d(${tabDrag.offsetX}px, 0, 0)` }
+    }
+    const shift = tabDrag.dragWidth + 2
+    if (tabDrag.targetIndex > tabDrag.sourceIndex && index > tabDrag.sourceIndex && index <= tabDrag.targetIndex) {
+      return { transform: `translate3d(${-shift}px, 0, 0)` }
+    }
+    if (tabDrag.targetIndex < tabDrag.sourceIndex && index >= tabDrag.targetIndex && index < tabDrag.sourceIndex) {
+      return { transform: `translate3d(${shift}px, 0, 0)` }
+    }
+    return undefined
+  }
+
   return (
     <ThemeProvider activeWorkspaceId={state.workspaceId ?? null}>
       <main
         className="shell-root"
         data-agent-visible={(panelVisible || fullVisible) || undefined}
         data-agent-mode={fullVisible ? 'full' : panelVisible ? 'panel' : 'hidden'}
+        data-tab-context-menu-open={contextMenuOpenTabId ? 'true' : undefined}
         style={{
           '--agent-panel-width': `${state.agentPanelWidthPx}px`,
           '--panel-edge-inset': `${PANEL_EDGE_INSET}px`,
@@ -416,41 +500,146 @@ function Shell() {
               event.preventDefault()
             }}
           >
-            {state.tabs.map(tab => (
-            <button
-              key={tab.id}
-              data-tab-id={tab.id}
-              role="tab"
-              aria-selected={state.activeTarget.kind === 'app' && state.activeTarget.tabId === tab.id}
-              tabIndex={state.activeTarget.kind === 'app' && state.activeTarget.tabId === tab.id ? 0 : -1}
-              className={`app-tab ${state.activeTarget.kind === 'app' && state.activeTarget.tabId === tab.id ? 'active' : ''}`}
-              onClick={() => void window.shellAPI.activateTab(tab.id)}
-            >
-              {tab.kind === 'browser' ? (
-                <BrowserTabIcon favicon={tab.browserState?.favicon} />
-              ) : tab.iconUrl ? (
-                <img className="app-tab-icon" src={tab.iconUrl} alt="" />
-              ) : tab.kind === 'internal' ? (
-                <Settings className="app-tab-icon-placeholder" size={14} />
-              ) : tab.kind === 'external' ? (
-                <AppWindow className="app-tab-icon-placeholder" size={14} />
-              ) : null}
-              <span className="app-tab-title">{tab.title}</span>
-              <span
-                className="tab-close"
-                role="button"
-                tabIndex={0}
-                aria-label={`Close ${tab.title}`}
-                onClick={(event) => { event.stopPropagation(); void window.shellAPI.closeTab(tab.id) }}
-                onKeyDown={(event) => {
-                  if (event.key !== 'Enter' && event.key !== ' ') return
-                  event.preventDefault()
-                  event.stopPropagation()
-                  void window.shellAPI.closeTab(tab.id)
-                }}
-              ><X size={13} /></span>
-            </button>
-            ))}
+            {displayedTabs.map((tab, index) => {
+              const tabIndex = state.tabs.findIndex(candidate => candidate.id === tab.id)
+              return (
+                <ContextMenu
+                  key={tab.id}
+                  onOpenChange={open => setContextMenuOpenTabId(open ? tab.id : null)}
+                >
+                  <ContextMenuTrigger asChild>
+                    <button
+                      data-tab-id={tab.id}
+                      role="tab"
+                      aria-selected={state.activeTarget.kind === 'app' && state.activeTarget.tabId === tab.id}
+                      tabIndex={state.activeTarget.kind === 'app' && state.activeTarget.tabId === tab.id ? 0 : -1}
+                      className={`app-tab ${state.activeTarget.kind === 'app' && state.activeTarget.tabId === tab.id ? 'active' : ''} ${tabDrag?.tabId === tab.id ? 'dragging' : ''}`}
+                      style={getTabDragTransform(tab.id, index)}
+                      onClick={(event) => {
+                        if (suppressTabClickRef.current) {
+                          event.preventDefault()
+                          return
+                        }
+                        void window.shellAPI.activateTab(tab.id)
+                      }}
+                      onPointerDown={(event) => {
+                        if (event.button !== 0 || (event.target as HTMLElement).closest('.tab-close')) return
+                        const elements = Array.from(tabsRef.current?.querySelectorAll<HTMLElement>('[data-tab-id]') ?? [])
+                        const sourceIndex = elements.findIndex(element => element.dataset.tabId === tab.id)
+                        if (sourceIndex < 0) return
+                        event.currentTarget.setPointerCapture(event.pointerId)
+                        tabDragRuntimeRef.current = {
+                          pointerId: event.pointerId,
+                          startX: event.clientX,
+                          sourceIndex,
+                          targetIndex: sourceIndex,
+                          order: displayedTabs.map(candidate => candidate.id),
+                          rects: elements.map(element => element.getBoundingClientRect()),
+                          moved: false,
+                        }
+                        closeTabContextMenu()
+                        setTabDrag({
+                          tabId: tab.id,
+                          sourceIndex,
+                          targetIndex: sourceIndex,
+                          offsetX: 0,
+                          dragWidth: elements[sourceIndex]!.getBoundingClientRect().width,
+                        })
+                      }}
+                      onPointerMove={(event) => {
+                        const runtime = tabDragRuntimeRef.current
+                        if (!runtime || runtime.pointerId !== event.pointerId) return
+                        const offsetX = event.clientX - runtime.startX
+                        if (Math.abs(offsetX) > 3) runtime.moved = true
+                        const draggedRect = runtime.rects[runtime.sourceIndex]!
+                        const draggedCenter = draggedRect.left + draggedRect.width / 2 + offsetX
+                        let targetIndex = runtime.sourceIndex
+                        if (offsetX > 0) {
+                          for (let candidate = runtime.sourceIndex + 1; candidate < runtime.rects.length; candidate += 1) {
+                            const rect = runtime.rects[candidate]!
+                            if (draggedCenter >= rect.left + rect.width / 2) targetIndex = candidate
+                          }
+                        } else if (offsetX < 0) {
+                          for (let candidate = runtime.sourceIndex - 1; candidate >= 0; candidate -= 1) {
+                            const rect = runtime.rects[candidate]!
+                            if (draggedCenter <= rect.left + rect.width / 2) targetIndex = candidate
+                          }
+                        }
+                        runtime.targetIndex = targetIndex
+                        setTabDrag(current => current ? { ...current, offsetX, targetIndex } : current)
+                        const strip = tabsRef.current
+                        if (strip) {
+                          const stripRect = strip.getBoundingClientRect()
+                          if (event.clientX < stripRect.left + 24) strip.scrollLeft -= 12
+                          else if (event.clientX > stripRect.right - 24) strip.scrollLeft += 12
+                        }
+                      }}
+                      onPointerUp={(event) => {
+                        const runtime = tabDragRuntimeRef.current
+                        if (!runtime || runtime.pointerId !== event.pointerId) return
+                        if (runtime.moved) {
+                          suppressTabClickRef.current = true
+                          const nextOrder = [...runtime.order]
+                          const [movedTabId] = nextOrder.splice(runtime.sourceIndex, 1)
+                          nextOrder.splice(runtime.targetIndex, 0, movedTabId!)
+                          setOptimisticTabOrder(nextOrder)
+                          void window.shellAPI.setTabOrder(nextOrder).catch(() => setOptimisticTabOrder(null))
+                          setTimeout(() => { suppressTabClickRef.current = false }, 0)
+                        }
+                        tabDragRuntimeRef.current = null
+                        setTabDrag(null)
+                        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                          event.currentTarget.releasePointerCapture(event.pointerId)
+                        }
+                      }}
+                      onPointerCancel={() => {
+                        tabDragRuntimeRef.current = null
+                        setTabDrag(null)
+                      }}
+                    >
+                      {tab.kind === 'browser' ? (
+                        <BrowserTabIcon favicon={tab.browserState?.favicon} />
+                      ) : tab.iconUrl ? (
+                        <img className="app-tab-icon" src={tab.iconUrl} alt="" />
+                      ) : tab.kind === 'internal' ? (
+                        <Settings className="app-tab-icon-placeholder" size={14} />
+                      ) : tab.kind === 'external' ? (
+                        <AppWindow className="app-tab-icon-placeholder" size={14} />
+                      ) : null}
+                      <span className="app-tab-title">{tab.title}</span>
+                      <span
+                        className="tab-close"
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Close ${tab.title}`}
+                        onClick={(event) => { event.stopPropagation(); void window.shellAPI.closeTab(tab.id) }}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter' && event.key !== ' ') return
+                          event.preventDefault()
+                          event.stopPropagation()
+                          void window.shellAPI.closeTab(tab.id)
+                        }}
+                      ><X size={13} /></span>
+                    </button>
+                  </ContextMenuTrigger>
+                  <StyledContextMenuContent
+                    ref={contextMenuContentRef}
+                    minWidth="min-w-40"
+                    style={{ zIndex: 'var(--z-floating-menu, 400)' }}
+                  >
+                    <StyledContextMenuItem onSelect={() => void window.shellAPI.closeTab(tab.id)}>关闭</StyledContextMenuItem>
+                    <StyledContextMenuItem
+                      disabled={tabIndex < 0 || tabIndex === state.tabs.length - 1}
+                      onSelect={() => void window.shellAPI.closeTabsRight(tab.id)}
+                    >关闭右侧</StyledContextMenuItem>
+                    <StyledContextMenuItem
+                      disabled={state.tabs.length <= 1}
+                      onSelect={() => void window.shellAPI.closeOtherTabs(tab.id)}
+                    >关闭其他</StyledContextMenuItem>
+                  </StyledContextMenuContent>
+                </ContextMenu>
+              )
+            })}
           </div>
         </nav>
         <TopBarButton
@@ -464,6 +653,18 @@ function Shell() {
         </TopBarButton>
       </header>
 
+      {contextMenuOpenTabId && (
+        <div
+          className="tab-context-surface-dismiss-layer"
+          aria-hidden="true"
+          onPointerDown={closeTabContextMenu}
+          onContextMenu={event => {
+            event.preventDefault()
+            closeTabContextMenu()
+          }}
+        />
+      )}
+
       <section className="surface-layout">
         <div className={`app-region ${panelVisible ? 'with-agent-panel' : ''} ${animatePanelTransition ? 'panel-transition' : ''}`}>
           {bootstrap && appHostSources && (
@@ -474,7 +675,7 @@ function Shell() {
                 ariaLabel="Home"
                 className={`surface-webview app-surface ${activeContentTabId === null ? 'surface-active' : ''}`}
               />
-              {state.tabs.filter(tab => tab.kind !== 'browser' && (tab.kind === 'built-in' || tab.kind === 'internal' || tab.status === 'ready')).map(tab => (
+              {surfaceTabs.filter(tab => tab.kind !== 'browser' && (tab.kind === 'built-in' || tab.kind === 'internal' || tab.status === 'ready')).map(tab => (
                 <SurfaceWebview
                   key={tab.id}
                   src={tab.kind === 'built-in' ? appHostSources.tabs.get(tab.id)! : tab.entry}
@@ -486,14 +687,14 @@ function Shell() {
                   className={`surface-webview app-surface ${activeContentTabId === tab.id ? 'surface-active' : ''}`}
                 />
               ))}
-              {state.tabs.filter(tab => tab.kind === 'browser').map(tab => (
+              {surfaceTabs.filter(tab => tab.kind === 'browser').map(tab => (
                 <BrowserTabSurface
                   key={tab.id}
                   tab={tab}
                   active={activeContentTabId === tab.id}
                 />
               ))}
-              {state.tabs.filter(tab => tab.kind === 'internal' && tab.status !== 'ready').map(tab => (
+              {surfaceTabs.filter(tab => tab.kind === 'internal' && tab.status !== 'ready').map(tab => (
                 <div
                   key={`status-${tab.id}`}
                   className={`app-status-surface ${activeContentTabId === tab.id ? 'surface-active' : ''}`}
@@ -505,7 +706,7 @@ function Shell() {
                   </div>
                 </div>
               ))}
-              {state.tabs.filter(tab => tab.kind === 'external' && tab.status !== 'ready').map(tab => (
+              {surfaceTabs.filter(tab => tab.kind === 'external' && tab.status !== 'ready').map(tab => (
                 <div
                   key={`status-${tab.id}`}
                   className={`app-status-surface ${activeContentTabId === tab.id ? 'surface-active' : ''}`}

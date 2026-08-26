@@ -649,6 +649,20 @@ app.whenReady().then(async () => {
     ipcMain.handle(APP_PLATFORM_CHANNELS.CLOSE_TAB, (event, tabId: string) =>
       getShellViews(event.sender.id, ['shell']).closeTab(tabId)
     )
+    ipcMain.handle(
+      APP_PLATFORM_CHANNELS.REORDER_TAB,
+      (event, tabId: string, targetTabId: string, placement: 'before' | 'after') =>
+        getShellViews(event.sender.id, ['shell']).reorderTab(tabId, targetTabId, placement),
+    )
+    ipcMain.handle(APP_PLATFORM_CHANNELS.SET_TAB_ORDER, (event, tabIds: string[]) =>
+      getShellViews(event.sender.id, ['shell']).setTabOrder(tabIds)
+    )
+    ipcMain.handle(APP_PLATFORM_CHANNELS.CLOSE_TABS_RIGHT, (event, tabId: string) =>
+      getShellViews(event.sender.id, ['shell']).closeTabsRight(tabId)
+    )
+    ipcMain.handle(APP_PLATFORM_CHANNELS.CLOSE_OTHER_TABS, (event, tabId: string) =>
+      getShellViews(event.sender.id, ['shell']).closeOtherTabs(tabId)
+    )
     ipcMain.handle(APP_PLATFORM_CHANNELS.TOGGLE_AGENT_PANEL, event =>
       getShellViews(event.sender.id, ['shell', 'agent']).toggleAgentPanel()
     )

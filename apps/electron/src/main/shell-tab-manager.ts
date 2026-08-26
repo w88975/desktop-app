@@ -135,6 +135,38 @@ export class ShellTabManager {
     })
   }
 
+  reorderAppTab(
+    tabId: string,
+    targetTabId: string,
+    placement: 'before' | 'after',
+  ): TabTransaction {
+    return this.commit(draft => {
+      if (tabId === targetTabId) return
+      const sourceIndex = draft.tabs.findIndex(tab => tab.id === tabId)
+      const targetIndex = draft.tabs.findIndex(tab => tab.id === targetTabId)
+      if (sourceIndex < 0) throw new Error(`Unknown app tab: ${tabId}`)
+      if (targetIndex < 0) throw new Error(`Unknown app tab: ${targetTabId}`)
+
+      const [moved] = draft.tabs.splice(sourceIndex, 1)
+      const remainingTargetIndex = draft.tabs.findIndex(tab => tab.id === targetTabId)
+      const insertionIndex = placement === 'before'
+        ? remainingTargetIndex
+        : remainingTargetIndex + 1
+      draft.tabs.splice(insertionIndex, 0, moved)
+    })
+  }
+
+  setAppTabOrder(tabIds: readonly string[]): TabTransaction {
+    return this.commit(draft => {
+      if (tabIds.length !== draft.tabs.length || new Set(tabIds).size !== tabIds.length) {
+        throw new Error('Invalid app tab order')
+      }
+      const byId = new Map(draft.tabs.map(tab => [tab.id, tab]))
+      if (tabIds.some(tabId => !byId.has(tabId))) throw new Error('Invalid app tab order')
+      draft.tabs = tabIds.map(tabId => byId.get(tabId)!)
+    })
+  }
+
   closeAppTab(tabId: string): TabTransaction<AppTab | null> {
     return this.commit(draft => {
       const index = draft.tabs.findIndex(tab => tab.id === tabId)

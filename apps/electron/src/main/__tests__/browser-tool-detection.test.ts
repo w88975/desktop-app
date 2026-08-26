@@ -29,6 +29,7 @@ describe('browser-tool-detection', () => {
       expect(getBrowserToolCommandVerb({ command: '  SNAPSHOT   ' })).toBe('snapshot')
       expect(getBrowserToolCommandVerb({ command: '--help' })).toBe('--help')
       expect(getBrowserToolCommandVerb({ command: 'navigate https://example.com' })).toBe('navigate')
+      expect(getBrowserToolCommandVerb({ _command: 'click @e1' })).toBe('click')
     })
 
     it('returns empty string for invalid inputs', () => {

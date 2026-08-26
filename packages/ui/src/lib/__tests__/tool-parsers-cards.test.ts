@@ -29,6 +29,13 @@ describe('extractOverlayCards', () => {
     expect(cards[0]?.commandPreview).toBe('navigate https://example.com')
   })
 
+  it('renders deprecated _command alias as the raw browser command', () => {
+    const activity = makeActivity({
+      toolInput: { _command: 'click @e1' },
+    })
+    expect(extractOverlayCards(activity)[0]?.commandPreview).toBe('click @e1')
+  })
+
   it('returns input + output cards for browser_tool with output', () => {
     const activity = makeActivity({
       toolName: 'mcp__session__browser_tool',

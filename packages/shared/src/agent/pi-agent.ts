@@ -1543,7 +1543,7 @@ export class PiAgent extends BaseAgent {
 
         try {
           const result = await executeBrowserToolCommand({
-            command: (args.command as string | string[]) ?? '',
+            command: ((args.command ?? args._command) as string | string[]) ?? '',
             fns: browserFns,
             sessionId: this._sessionId,
           });

@@ -25,7 +25,8 @@ export function normalizeBrowserToolName(toolName: string): string | null {
 export function getBrowserToolCommandVerb(toolInput: unknown): string {
   if (!toolInput || typeof toolInput !== 'object') return ''
 
-  const command = (toolInput as { command?: unknown }).command
+  const input = toolInput as { command?: unknown; _command?: unknown }
+  const command = input.command ?? input._command
   if (typeof command !== 'string') return ''
 
   return command.trim().toLowerCase().split(/\s+/)[0] || ''
@@ -40,4 +41,3 @@ export function shouldActivateBrowserOverlay(toolName: string, toolInput: unknow
 
   return !BROWSER_TOOL_OVERLAY_EXCLUDED_COMMANDS.has(verb)
 }
-

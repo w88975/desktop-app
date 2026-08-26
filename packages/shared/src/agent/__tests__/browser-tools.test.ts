@@ -137,6 +137,12 @@ describe('createBrowserTools', () => {
       expect(result.content[0].text).toContain('When you are done using the browser')
     })
 
+    it('accepts deprecated _command alias and normalizes it before execution', async () => {
+      const result = await executeTool(tools, 'browser_tool', { _command: 'navigate example.com' })
+      expect(result.content[0].text).toContain('Navigated to')
+      expect(result.content[0].text).toContain('https://example.com')
+    })
+
     it('releases control when navigate lands on a security challenge', async () => {
       let releaseCalls = 0
       mockFns.detectChallenge = async () => ({

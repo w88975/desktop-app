@@ -853,7 +853,11 @@ function buildProxyTools(): ToolDefinition<any, any>[] {
         };
       }
 
-      const inputObj = params as Record<string, unknown>;
+      let inputObj = params as Record<string, unknown>;
+      if (def.name === 'mcp__session__browser_tool' && inputObj.command === undefined && inputObj._command !== undefined) {
+        const { _command, ...rest } = inputObj;
+        inputObj = { ...rest, command: _command };
+      }
 
       // Permission checking via main process
       const approvedInput = await requestPreToolUseApproval(def.name, inputObj, toolCallId);

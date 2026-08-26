@@ -25,6 +25,19 @@ function openTodo(manager: ShellTabManager, id = 'todo-1') {
 }
 
 describe('ShellTabManager 原子事务', () => {
+  it('支持动态 Tab 拖拽重排', () => {
+    const manager = createManager()
+    const definition = { ...TEST_APP, instancePolicy: 'multiple' as const }
+    for (const id of ['a', 'b', 'c']) {
+      manager.openAppTab({ definition, tabId: id, webContentsId: -1 })
+    }
+
+    manager.reorderAppTab('c', 'a', 'before')
+    expect(manager.getState().tabs.map(tab => tab.id)).toEqual(['c', 'a', 'b'])
+    manager.reorderAppTab('c', 'b', 'after')
+    expect(manager.getState().tabs.map(tab => tab.id)).toEqual(['a', 'b', 'c'])
+  })
+
   it('创建 singleton app，重复打开只激活现有 tab', () => {
     const manager = createManager()
     const first = manager.openAppTab({

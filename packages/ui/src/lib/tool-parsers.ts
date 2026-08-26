@@ -457,8 +457,9 @@ export function formatToolCommandPreview(
   }
 
   // Wrapper commands pass through the raw CLI input for best fidelity.
-  if (normalized === 'browser_tool' && typeof input.command === 'string' && input.command.trim()) {
-    return input.command.trim()
+  const browserCommand = input.command ?? input._command
+  if (normalized === 'browser_tool' && typeof browserCommand === 'string' && browserCommand.trim()) {
+    return browserCommand.trim()
   }
 
   const entries = Object.entries(input)

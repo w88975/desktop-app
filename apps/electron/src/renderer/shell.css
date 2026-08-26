@@ -43,6 +43,10 @@ body {
   overflow: visible;
 }
 
+.shell-root[data-tab-context-menu-open="true"] .titlebar {
+  -webkit-app-region: no-drag;
+}
+
 .no-drag { -webkit-app-region: no-drag; }
 
 .logo-menu-anchor {
@@ -134,7 +138,7 @@ body {
   cursor: pointer;
   white-space: nowrap;
   font-size: 12px;
-  transition: background-color 100ms ease, border-color 100ms ease, color 100ms ease;
+  transition: background-color 100ms ease, border-color 100ms ease, color 100ms ease, transform 150ms ease;
 }
 
 /* Override the titlebar button font reset with explicit compact tab type. */
@@ -148,10 +152,10 @@ body {
 .home-tab.active,
 .agent-tab.active,
 .app-tab.active {
-  border-color: #d4d4d8;
-  background: #fff;
+  border-color: color-mix(in srgb, var(--foreground) 18%, transparent);
+  background: var(--background);
   box-shadow: none;
-  color: #18181b;
+  color: var(--foreground);
 }
 
 /* The Agent toggle is a button, not a tab — it fronts no surface, so it keeps
@@ -198,6 +202,7 @@ body {
 .tabs::-webkit-scrollbar { display: none; }
 
 .app-tab {
+  position: relative;
   min-width: 32px;
   max-width: 190px;
   flex: 1 1 190px;
@@ -205,12 +210,22 @@ body {
   padding-inline: 6px;
   container-name: app-tab;
   container-type: inline-size;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.app-tab.dragging {
+  z-index: 3;
+  cursor: grabbing;
+  transition: none;
+  will-change: transform;
 }
 .app-tab-title {
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-align: left;
 }
 
 .app-tab-icon,
@@ -240,6 +255,13 @@ body {
 
 @container app-tab (max-width: 84px) {
   .tab-close { display: none; }
+}
+
+.tab-context-surface-dismiss-layer {
+  position: fixed;
+  z-index: 390;
+  inset: 48px 0 0;
+  -webkit-app-region: no-drag;
 }
 
 .tab-close:hover { background: color-mix(in srgb, var(--foreground) 8%, transparent); }

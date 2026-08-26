@@ -498,6 +498,37 @@ describe('ShellViewManager webview lifecycle', () => {
     manager.closeTab(background.tabId)
   })
 
+  it('closes tabs to the right or all other tabs in one shell action', () => {
+    const detached: string[] = []
+    const manager = new ShellViewManager({
+      window: createWindow() as any,
+      workspaceId: 'ws-1',
+      initialActiveTarget: 'home',
+      externalAppRegistry: createExternalAppRegistry() as any,
+      registerSurface: () => {},
+      unregisterSurface: () => {},
+      browserTabs: {
+        createManualBrowser: mock(() => 'browser-manual'),
+        attachTabWebContents: mock(() => {}),
+        detachTabWebContents: mock((instanceId: string) => detached.push(instanceId)),
+        setTabVisibility: mock(() => {}),
+      },
+    })
+    const first = manager.openBrowserTab('browser-a')
+    const second = manager.openBrowserTab('browser-b')
+    manager.openBrowserTab('browser-c')
+
+    manager.closeTabsRight(second.tabId)
+    expect(manager.getState().tabs.map(tab => tab.browserInstanceId)).toEqual(['browser-a', 'browser-b'])
+    expect(detached).toContain('browser-c')
+
+    manager.closeOtherTabs(second.tabId)
+    expect(manager.getState().tabs.map(tab => tab.browserInstanceId)).toEqual(['browser-b'])
+    expect(detached).toContain('browser-a')
+    expect(manager.getState().activeTarget).toEqual({ kind: 'app', tabId: second.tabId })
+    expect(first.tabId).not.toBe(second.tabId)
+  })
+
   it('opens one trusted Settings tab and remembers its last page', () => {
     const manager = new ShellViewManager({
       window: createWindow() as any,
