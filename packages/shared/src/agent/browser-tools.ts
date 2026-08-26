@@ -36,7 +36,7 @@ function successResponse(text: string): ToolResult {
   };
 }
 
-const BROWSER_RELEASE_HINT = '\n\nWhen you are done using the browser, call browser_tool with command "close" to close the window entirely, or "release" to dismiss the overlay and let the user continue browsing.';
+const BROWSER_RELEASE_HINT = '\n\nWhen you are done using the browser, call browser_tool with command "close" to close the browser tab entirely, or "release" to dismiss the overlay and let the user continue browsing.';
 
 // ============================================================================
 // Browser Pane Function Interface
@@ -220,11 +220,11 @@ Examples:
 - \`key Enter\`
 - \`key k meta\`
 - \`downloads wait 15000\`
-- \`focus [windowId]\` — focus existing browser window (no new window)
-- \`windows\` — list current browser windows and ownership state
+- \`focus [windowId]\` — focus existing browser tab (no new tab)
+- \`windows\` — list current browser tabs and ownership state
 - \`release [windowId|all]\` — dismiss the agent control overlay when done
-- \`close [windowId]\` — close and destroy the browser window
-- \`hide [windowId]\` — hide the window while preserving state`;
+- \`close [windowId]\` — close and destroy the browser tab
+- \`hide [windowId]\` — switch away from the tab while preserving state`;
 
 // ============================================================================
 // Tool Factories
@@ -234,7 +234,7 @@ export function createBrowserTools(options: BrowserToolsOptions) {
   function getBrowserFns(): BrowserPaneFns {
     const fns = options.getBrowserPaneFns();
     if (!fns) {
-      throw new Error('Browser window controls are not available. This tool requires the desktop app.');
+      throw new Error('Browser tab controls are not available. This tool requires the desktop app.');
     }
     return fns;
   }

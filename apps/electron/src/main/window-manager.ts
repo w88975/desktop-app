@@ -18,6 +18,7 @@ import type { AppCatalogItem, AppTabActionResult } from '@craft-agent/session-to
 import type { MainAppTabsResult, MainAppTabActionResult } from '@craft-agent/session-tools-core'
 import { isSettingsShortcut } from './settings-shortcut'
 import { listMainAppTabs, switchMainAppTab, closeMainAppTab } from './main-app-tools'
+import type { BrowserTabBackend } from './browser-tab-host'
 
 // Vite dev server URL for hot reload
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
@@ -75,8 +76,49 @@ export class WindowManager {
   private keyboardCloseIntentTimeouts: Map<number, NodeJS.Timeout> = new Map()  // Auto-clear stale keyboard-close intents
   private isAppQuitting = false  // Skip layered close interception during app quit
   private settingsWindowFactory: (() => Promise<BrowserWindow | null>) | null = null
+  private browserTabBackend: BrowserTabBackend | null = null
 
   constructor(private readonly externalAppRegistry: ExternalAppRegistry) {}
+
+  setBrowserTabBackend(backend: BrowserTabBackend): void {
+    this.browserTabBackend = backend
+  }
+
+  openBrowserTab(
+    instanceId: string,
+    workspaceId: string | null,
+    options: { initialUrl?: string; show?: boolean } = {},
+  ): boolean {
+    const target = workspaceId
+      ? (this.getPreferredWindowForWorkspace(workspaceId) ?? this.focusOrCreateWindow(workspaceId))
+      : (this.getFocusedWindow() ?? this.getAllWindows()[0]?.window ?? null)
+    if (!target) return false
+    const manager = this.shellViews.get(target.webContents.id)
+    if (!manager) return false
+    manager.openBrowserTab(instanceId, options)
+    return true
+  }
+
+  focusBrowserTab(instanceId: string): boolean {
+    for (const manager of this.shellViews.values()) {
+      if (manager.focusBrowserInstance(instanceId)) return true
+    }
+    return false
+  }
+
+  hideBrowserTab(instanceId: string): boolean {
+    for (const manager of this.shellViews.values()) {
+      if (manager.hideBrowserInstance(instanceId)) return true
+    }
+    return false
+  }
+
+  closeBrowserTab(instanceId: string): boolean {
+    for (const manager of this.shellViews.values()) {
+      if (manager.closeBrowserInstance(instanceId)) return true
+    }
+    return false
+  }
 
   async listAppsForAgent(_workspaceId: string): Promise<AppCatalogItem[]> {
     return buildInstalledAppSummaries(this.externalAppRegistry.list()).map(app => ({
@@ -493,6 +535,21 @@ export class WindowManager {
       unregisterSurface: surfaceWebContentsId => {
         this.unregisterSurface(surfaceWebContentsId)
       },
+      browserTabs: {
+        createManualBrowser: workspace => {
+          if (!this.browserTabBackend) throw new Error('Built-in browser backend is unavailable')
+          return this.browserTabBackend.createManualBrowser(workspace)
+        },
+        attachTabWebContents: (instanceId, contents, host) => {
+          this.browserTabBackend?.attachTabWebContents(instanceId, contents, host)
+        },
+        detachTabWebContents: (instanceId, attachedWebContentsId) => {
+          this.browserTabBackend?.detachTabWebContents(instanceId, attachedWebContentsId)
+        },
+        setTabVisibility: (instanceId, visible) => {
+          this.browserTabBackend?.setTabVisibility(instanceId, visible)
+        },
+      },
     })
     this.shellViews.set(webContentsId, shellViewManager)
 
@@ -504,11 +561,28 @@ export class WindowManager {
     })
 
     window.webContents.on('did-attach-webview', (_event, guestWebContents) => {
-      if (!shellViewManager.attachGuest(guestWebContents)) {
-        windowLog.warn(`[app-platform] Closing unrecognized or duplicate guest: ${guestWebContents.getURL()}`)
-        guestWebContents.close()
-        return
+      const attachWithRetry = (attempt: number): void => {
+        if (guestWebContents.isDestroyed()) return
+        if (shellViewManager.attachGuest(guestWebContents)) return
+
+        // A newly attached <webview> can report an empty URL while Chromium is
+        // still committing its initial navigation. Never guess ownership from
+        // FIFO descriptor order: concurrent Browser Tabs can then cross-wire.
+        if (attempt < 20) {
+          setTimeout(() => attachWithRetry(attempt + 1), 25)
+          return
+        }
+
+        windowLog.warn(`[app-platform] Closing unrecognized or duplicate guest after attach retry: ${guestWebContents.getURL()}`)
+        // Closing synchronously inside did-attach-webview can hit Chromium's
+        // guest attach lifecycle invariant and terminate the main process with
+        // SIGTRAP. Defer teardown until current native attach callback unwinds.
+        setTimeout(() => {
+          if (!guestWebContents.isDestroyed()) guestWebContents.close()
+        }, 0)
       }
+
+      attachWithRetry(0)
 
       this.installSettingsShortcut(guestWebContents)
 

@@ -2,7 +2,9 @@
 
 > 基于上游 craft-agents-oss v0.11.4 · 核验于 2026-08-09
 
-Agent 可以驱动一个内嵌在应用里的浏览器窗口 —— 打开网页、读无障碍树、点击填表、截图、看控制台与网络请求。这是「让 Agent 用你的登录态去操作任意网站」的能力底座，也是 Source 之外的第二条外部系统接入路径。
+Agent 可以驱动主 Shell 中的内置 Browser App Tab —— 打开网页、读无障碍树、点击填表、截图、看控制台与网络请求。这是「让 Agent 用你的登录态去操作任意网站」的能力底座，也是 Source 之外的第二条外部系统接入路径。
+
+Browser 是 `kind: 'browser'` 的一等内置 App，支持多实例。每个 Tab 直接托管一个无特权 Electron `<webview>` guest；可信 toolbar 与 Agent 控制浮层由 Shell DOM 渲染。无 Shell 的测试/兼容路径仍可回退到旧 `BrowserWindow + BrowserView` host。
 
 > **本篇讲代码结构。** 「怎么用这个功能」「API 发现的实操套路」见官方文档 <https://agents.craft.do/docs/browser/overview>（含 overview、API Discovery、Examples 三篇）。
 
@@ -17,7 +19,10 @@ Agent 可以驱动一个内嵌在应用里的浏览器窗口 —— 打开网页
 
 | 文件 | 行数 | 职责 |
 |---|---|---|
-| `apps/electron/src/main/browser-pane-manager.ts` | 3613 | `BrowserPaneManager` —— 真正持有浏览器实例，**全仓库第二大文件** |
+| `apps/electron/src/main/browser-pane-manager.ts` | — | `BrowserPaneManager` —— 浏览器控制器；运行时挂接 Browser App Tab，兼容旧窗口 host |
+| `apps/electron/src/main/browser-tab-host.ts` | — | Browser manager 与 Shell Tab 之间的 host/backend 契约 |
+| `apps/electron/src/main/shell-view-manager.ts` | — | Browser App Tab 生命周期、guest 授权、attach/detach |
+| `apps/electron/src/renderer/shell-main.tsx` | — | Browser toolbar、网页 guest、Agent 控制浮层 |
 | `packages/shared/src/agent/browser-tool-runtime.ts` | 1730 | `browser_tool` 的命令解析与执行 |
 | `apps/electron/src/main/browser-cdp.ts` | 1061 | Chrome DevTools Protocol 封装 |
 | `packages/server-core/src/sessions/RemoteBrowserPaneManager.ts` | 344 | 远程会话用的代理实现 |
@@ -39,7 +44,7 @@ graph TB
         direction TB
         bpm["BrowserPaneManager<br/>apps/electron/src/main"]
         cdp["browser-cdp.ts<br/>Chrome DevTools Protocol"]
-        view["Electron WebContentsView"]
+        view["Browser App Tab<br/>Electron webview guest"]
         bpm --> cdp --> view
     end
 
@@ -63,7 +68,7 @@ graph TB
 
 普通 RPC 是客户端调服务端。浏览器这里反过来：**服务端调客户端**。
 
-原因很直接 —— 真正的浏览器窗口带着用户的登录态，只能在用户那台机器上。会话逻辑可能跑在远程服务器，但它没有浏览器。
+原因很直接 —— 真正的 Browser App Tab 带着用户的登录态，只能在用户那台机器上。会话逻辑可能跑在远程服务器，但它没有浏览器 guest。
 
 实现：
 
@@ -138,11 +143,15 @@ const BROWSER_TOOL_OVERLAY_EXCLUDED_COMMANDS = new Set([
 
 也就是**除了这 7 个动词，其余都激活浮层**。加新命令时想一下它属于哪类。
 
-## 会话与浏览器实例的映射
+## 会话与 Browser App Tab 的映射
 
 工具命令里**不需要传实例 ID** —— 映射由回调提供方处理，走 `getOrCreateForSession` 模式。`browser-tools.ts` 的注释写得很明确。
 
-这意味着：一个会话对应它自己的浏览器实例，Agent 不需要管理句柄。相关方法在 `BrowserCapabilityMethod` 里：`createForSession`、`getOrCreateForSession`、`focusBoundForSession`、`destroyForSession`、`bindSession`、`unbindAllForSession`。
+这意味着：一个会话对应它自己的浏览器实例/Tab，Agent 不需要管理句柄。相关方法在 `BrowserCapabilityMethod` 里：`createForSession`、`getOrCreateForSession`、`focusBoundForSession`、`destroyForSession`、`bindSession`、`unbindAllForSession`。
+
+生命周期命令保持兼容：`focus` 激活 Tab，`hide` 切离 Tab 但保留 guest，`close` 关闭 Tab 并销毁 guest，`window-resize` 设置 Browser surface viewport。
+
+页面里的 `window.open` / `target="_blank"` 不创建独立原生窗口：前台 disposition 创建并激活同级 Browser App Tab，同时把 session/Agent 控制权转移到新 Tab；background disposition 创建后台 Tab。
 
 ### Agent 控制权
 
@@ -167,7 +176,7 @@ focus / snapshot / click / fill / select / screenshot / evaluate / scroll
 
 它们在 `CHANNEL_MAP` 里是**嵌套命名空间**形式（`'browserPane.create'` → `api.browserPane.create()`，见 [06-rpc](06-rpc.md) 的映射一节）。
 
-handler 在 `apps/electron/src/main/handlers/browser.ts` —— 这是**少数几个正当放在 electron 而非 server-core 的 handler 之一**，因为它真的需要 Electron 的 `WebContentsView`。
+handler 在 `apps/electron/src/main/handlers/browser.ts` —— 这是**少数几个正当放在 electron 而非 server-core 的 handler 之一**，因为它真的需要 Electron `WebContents`、CDP 与本地 Shell Tab。
 
 ## 二次开发时的落点
 
@@ -175,9 +184,9 @@ handler 在 `apps/electron/src/main/handlers/browser.ts` —— 这是**少数�
 |---|---|
 | 加一个浏览器命令 | `browser-tool-runtime.ts` 加动词 + `BrowserPaneFns` 加回调 + `BrowserPaneManager` 实现 + 远程走 `BrowserCapabilityMethod` 加一项 |
 | 改浮层激活规则 | `browser-tool-detection.ts` 的排除集合 |
-| 改浏览器 UI | `apps/electron/src/renderer/components/browser/` |
+| 改浏览器 UI | `apps/electron/src/renderer/shell-main.tsx`、`shell.css` |
 | 让新命令支持远程会话 | **必须**同时加进 `BrowserCapabilityMethod` 并在客户端 dispatcher 实现，否则远程会话下该命令失效 |
-| 接一个外部浏览器（非内嵌） | 大改，`BrowserPaneManager` 与 CDP 层强绑 Electron `WebContentsView` |
+| 接一个外部浏览器（非内嵌） | 大改；当前 CDP 绑定 Browser App guest `WebContents` |
 
 > ⚠️ **加命令时最容易漏的一步**：只改了本地路径，没加 `BrowserCapabilityMethod`。本机测一切正常，远程 workspace 下该命令直接不可用。
 

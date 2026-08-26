@@ -266,6 +266,82 @@ describe('BrowserPaneManager', () => {
     expect(manager.listInstances()).toHaveLength(1)
   })
 
+  it('uses Browser App tab host when a workspace shell is available', async () => {
+    let backend: any
+    const openBrowserTab = mock((_instanceId: string, _workspaceId: string | null, _options: Record<string, unknown>) => true)
+    const windowManager = {
+      setBrowserTabBackend: (value: any) => { backend = value },
+      openBrowserTab,
+      focusBrowserTab: mock(() => true),
+      hideBrowserTab: mock(() => true),
+      closeBrowserTab: mock(() => true),
+    }
+    manager.setWindowManager(windowManager as any)
+
+    const creating = manager.createForSessionAsync('session-tab', { workspaceId: 'ws-tab', show: false })
+    const pendingInfo = manager.listInstances()[0]
+    expect(pendingInfo).toMatchObject({ ownerType: 'session', workspaceId: 'ws-tab' })
+    expect(openBrowserTab).toHaveBeenCalledWith(pendingInfo.id, 'ws-tab', { show: false })
+
+    const contents = createMockWebContents() as any
+    contents.id = 777
+    contents.once = contents.on
+    contents.isLoading = mock(() => false)
+    contents.close = mock(() => {})
+    contents.sendInputEvent = mock(() => {})
+
+    let viewport = { width: 1200, height: 852 }
+    const host = {
+      tabId: 'tab-1',
+      show: mock(() => {}),
+      hide: mock(() => {}),
+      close: mock(() => {}),
+      update: mock(() => {}),
+      setViewport: mock((width: number, height: number) => {
+        viewport = { width, height }
+        return viewport
+      }),
+      getViewport: () => viewport,
+    }
+    backend.attachTabWebContents(pendingInfo.id, contents, host)
+
+    const id = await creating
+    expect(id).toBe(pendingInfo.id)
+    expect((manager.getInstance(id) as any)?.presentation).toBe('tab')
+    await manager.navigate(id, 'example.com')
+    expect(contents.loadURL).toHaveBeenCalledWith('https://example.com')
+
+    manager.setAgentControl('session-tab', { displayName: 'Agent', intent: '检查页面' })
+    expect(host.update).toHaveBeenCalledWith(
+      expect.objectContaining({ id, agentControlActive: true }),
+      'Agent — 检查页面',
+    )
+    expect(manager.windowResize(id, 1024, 768)).toEqual({ width: 1024, height: 768 })
+
+    const openHandler = contents.setWindowOpenHandler.mock.calls.at(-1)?.[0]
+    const popupResult = openHandler({
+      url: 'https://example.com/details',
+      disposition: 'new-window',
+      frameName: '_blank',
+    })
+    expect(popupResult).toEqual({ action: 'deny' })
+    const popupCall = openBrowserTab.mock.calls.at(-1)!
+    const popupId = popupCall[0] as string
+    expect(popupId).not.toBe(id)
+    expect(popupCall).toEqual([popupId, 'ws-tab', { show: true }])
+    expect((manager as any).pendingTabInstances.get(popupId)?.initialUrl)
+      .toBe('https://example.com/details')
+    expect(manager.listInstances()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id, ownerType: 'manual', boundSessionId: null }),
+      expect.objectContaining({ id: popupId, ownerType: 'session', boundSessionId: 'session-tab' }),
+    ]))
+
+    manager.destroyInstance(id)
+    expect(host.close).toHaveBeenCalled()
+    manager.destroyInstance(popupId)
+    expect(manager.listInstances()).toHaveLength(0)
+  })
+
   it('allows http(s) popups with shared browser partition', () => {
     manager.createInstance('popup-allow')
     const instance = (manager as any).instances.get('popup-allow')

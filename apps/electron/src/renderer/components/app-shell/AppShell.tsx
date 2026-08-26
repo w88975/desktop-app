@@ -147,7 +147,6 @@ import { dispatchFocusInputEvent } from "./input/focus-input-events"
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { useAgentPresentation } from '@/context/AgentPresentationContext'
 import { TopBarButton } from '../ui/TopBarButton'
-import { BrowserTabStrip } from '../browser/BrowserTabStrip'
 import type { AgentShellCommand } from '../../../shared/app-platform'
 import { AgentPanel } from './AgentPanel'
 
@@ -2369,11 +2368,6 @@ export function FullAgentShell({
           >
             <PanelLeft className="h-4 w-4 text-foreground/70" strokeWidth={1.5} />
           </TopBarButton>
-        </div>
-
-        {/* Browser tab strip keeps the window's right end to itself. */}
-        <div className="fixed right-2 top-2 z-[100] flex min-w-0 items-center gap-1 pointer-events-auto">
-          <BrowserTabStrip activeSessionId={effectiveSessionId} maxVisibleBadges={3} />
         </div>
 
       {/* === OUTER LAYOUT: Unified Panel Stack | Right Sidebar === */}

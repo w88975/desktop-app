@@ -11,7 +11,7 @@ export type ActiveTarget =
   | { kind: 'agent' }
 
 export type AppInstancePolicy = 'single' | 'multiple'
-export type AppKind = 'built-in' | 'external' | 'internal'
+export type AppKind = 'built-in' | 'external' | 'internal' | 'browser'
 export type ExternalAppSourceType = 'builtin' | 'local' | 'remote'
 export type ExternalAppStatus = 'discovered' | 'loading' | 'ready' | 'error'
 
@@ -83,6 +83,19 @@ export interface AppDefinition {
   status?: ExternalAppStatus
   error?: string
   partition?: string
+  browserInstanceId?: string
+}
+
+export interface BrowserTabState {
+  url: string
+  title: string
+  favicon: string | null
+  isLoading: boolean
+  canGoBack: boolean
+  canGoForward: boolean
+  agentControlLabel?: string
+  viewportWidth?: number
+  viewportHeight?: number
 }
 
 export interface AppTab {
@@ -96,6 +109,8 @@ export interface AppTab {
   status: ExternalAppStatus
   error?: string
   partition?: string
+  browserInstanceId?: string
+  browserState?: BrowserTabState
 }
 
 export interface ShellState {

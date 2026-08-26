@@ -22,9 +22,10 @@ import {
 import { ShellTabManager, type ShellTabEffect } from './shell-tab-manager'
 import type { ExternalAppRegistry } from './external-app-registry'
 import { registerExternalAppProtocolForSession } from './external-app-protocol'
-import { buildInstalledAppSummaries, createSettingsDefinition, SETTINGS_APP_ID } from './internal-app-registry'
+import { BROWSER_APP_ID, buildInstalledAppSummaries, createSettingsDefinition, SETTINGS_APP_ID } from './internal-app-registry'
 import { isValidSettingsSubpage, type SettingsSubpage } from '../shared/settings-registry'
 import { BrowserCDP } from './browser-cdp'
+import type { BrowserTabBackend, BrowserTabHost } from './browser-tab-host'
 
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
 
@@ -35,6 +36,7 @@ interface ShellViewManagerOptions {
   externalAppRegistry: ExternalAppRegistry
   registerSurface: (webContentsId: number, kind: Exclude<SurfaceKind, 'shell'>, tabId?: string, appId?: string) => void
   unregisterSurface: (webContentsId: number) => void
+  browserTabs?: BrowserTabBackend
 }
 
 interface ManagedTab {
@@ -57,13 +59,16 @@ interface WebToolRegistrationWaiter {
 }
 
 interface GuestDescriptor {
-  kind: 'home' | 'agent' | 'app'
+  kind: 'home' | 'agent' | 'app' | 'browser'
   tabId?: string
   appId?: string
   external?: boolean
   internal?: boolean
   preload: string
+  browserInstanceId?: string
 }
+
+const BROWSER_INSTANCE_ARGUMENT_PREFIX = '--hxsy-browser-instance-id='
 
 export class ShellViewManager {
   private readonly window: BrowserWindow
@@ -71,6 +76,7 @@ export class ShellViewManager {
   private readonly registerSurface: ShellViewManagerOptions['registerSurface']
   private readonly unregisterSurface: ShellViewManagerOptions['unregisterSurface']
   private readonly externalAppRegistry: ExternalAppRegistry
+  private readonly browserTabs?: BrowserTabBackend
   private readonly unsubscribeExternalApps: () => void
   private readonly managedTabs = new Map<string, ManagedTab>()
   private readonly registeredWebToolHandlers = new Map<number, Set<string>>()
@@ -98,6 +104,7 @@ export class ShellViewManager {
     this.registerSurface = options.registerSurface
     this.unregisterSurface = options.unregisterSurface
     this.externalAppRegistry = options.externalAppRegistry
+    this.browserTabs = options.browserTabs
 
     const [width] = this.window.getContentSize()
     this.tabManager = new ShellTabManager({
@@ -151,6 +158,22 @@ export class ShellViewManager {
       const agentEntry = new URL(bootstrap.agentSrc)
       const appEntry = new URL(bootstrap.appHostSrc)
       const settingsEntry = new URL(bootstrap.settingsSrc)
+
+      const browser = [...this.managedTabs.values()].find(item =>
+        item.definition.kind === 'browser'
+        && item.definition.browserInstanceId
+        && item.definition.entry === url
+        && (!partition || item.definition.partition === partition)
+      )
+      if (browser) {
+        return {
+          kind: 'browser',
+          tabId: browser.tab.id,
+          appId: BROWSER_APP_ID,
+          browserInstanceId: browser.definition.browserInstanceId,
+          preload: '',
+        }
+      }
 
       if (parsed.origin === settingsEntry.origin && parsed.pathname === settingsEntry.pathname) {
         const tabId = parsed.searchParams.get('tabId') ?? undefined
@@ -207,7 +230,22 @@ export class ShellViewManager {
     const descriptor = this.describeGuest(url, partition)
     if (!descriptor) return false
     this.pendingGuestDescriptors.push(descriptor)
-    webPreferences.preload = fileURLToPath(descriptor.preload)
+    if (descriptor.preload) webPreferences.preload = fileURLToPath(descriptor.preload)
+    else delete webPreferences.preload
+    if (descriptor.kind === 'browser') {
+      webPreferences.partition = `persist:browser-pane`
+      webPreferences.additionalArguments = [
+        ...(webPreferences.additionalArguments ?? []).filter(
+          argument => !argument.startsWith(BROWSER_INSTANCE_ARGUMENT_PREFIX),
+        ),
+        `${BROWSER_INSTANCE_ARGUMENT_PREFIX}${descriptor.browserInstanceId}`,
+      ]
+      webPreferences.nodeIntegration = false
+      webPreferences.contextIsolation = true
+      webPreferences.sandbox = true
+      webPreferences.webSecurity = true
+      return true
+    }
     if (descriptor.external) {
       const appPartition = this.managedTabs.get(descriptor.tabId!)?.definition.partition
       if (!appPartition) return false
@@ -225,21 +263,34 @@ export class ShellViewManager {
     return true
   }
 
-  attachGuest(contents: WebContents): boolean {
+  attachGuest(contents: WebContents, urlHint?: string): boolean {
     if (this.destroyed || this.guestWebContents.has(contents.id)) return false
-    const parsedDescriptor = this.describeGuest(contents.getURL())
+    const parsedDescriptor = this.describeGuest(urlHint || contents.getURL())
+    const attachedPreferences = (contents as WebContents & {
+      getLastWebPreferences?: () => WebPreferences
+    }).getLastWebPreferences?.()
+    const browserInstanceArgument = attachedPreferences?.additionalArguments?.find((argument: string) =>
+      argument.startsWith(BROWSER_INSTANCE_ARGUMENT_PREFIX)
+    )
+    const attachedBrowserInstanceId = browserInstanceArgument
+      ? browserInstanceArgument.slice(BROWSER_INSTANCE_ARGUMENT_PREFIX.length)
+      : null
     let pendingIndex = -1
-    if (parsedDescriptor) {
+    if (attachedBrowserInstanceId) {
+      pendingIndex = this.pendingGuestDescriptors.findIndex(candidate =>
+        candidate.kind === 'browser' && candidate.browserInstanceId === attachedBrowserInstanceId
+      )
+    } else if (parsedDescriptor) {
       pendingIndex = this.pendingGuestDescriptors.findIndex(candidate =>
         candidate.kind === parsedDescriptor.kind && candidate.tabId === parsedDescriptor.tabId
       )
-    } else if (this.pendingGuestDescriptors.length > 0) {
-      pendingIndex = 0
     }
     const authorizedDescriptor = pendingIndex >= 0
       ? this.pendingGuestDescriptors.splice(pendingIndex, 1)[0]
       : null
-    const descriptor = parsedDescriptor ?? authorizedDescriptor
+    const descriptor = attachedBrowserInstanceId
+      ? authorizedDescriptor
+      : parsedDescriptor ?? authorizedDescriptor
     if (!descriptor) return false
 
     if (descriptor.kind === 'agent') {
@@ -257,10 +308,14 @@ export class ShellViewManager {
       if (descriptor.internal && descriptor.appId === SETTINGS_APP_ID) {
         this.settingsWebContents = contents
       }
+      if (descriptor.kind === 'browser' && descriptor.browserInstanceId && tab) {
+        const host = this.createBrowserTabHost(tab.tab.id)
+        this.browserTabs?.attachTabWebContents(descriptor.browserInstanceId, contents, host)
+      }
     }
 
     this.guestWebContents.set(contents.id, contents)
-    this.registerSurface(contents.id, descriptor.kind, descriptor.tabId, descriptor.appId)
+    this.registerSurface(contents.id, descriptor.kind === 'browser' ? 'app' : descriptor.kind, descriptor.tabId, descriptor.appId)
     this.installGuestGuards(contents, descriptor)
     contents.once('destroyed', () => this.detachGuest(contents.id))
 
@@ -284,6 +339,16 @@ export class ShellViewManager {
 
   private installGuestGuards(contents: WebContents, descriptor: GuestDescriptor): void {
     const kind = descriptor.kind
+    if (kind === 'browser') {
+      // BrowserPaneManager owns setWindowOpenHandler for Browser App guests.
+      // Do not overwrite it here: its handler converts window.open/_blank into
+      // sibling Browser Tabs and retains a native-window fallback only when no
+      // Shell host exists.
+      contents.on('render-process-gone', (_event, details) => {
+        windowLog.error(`Browser renderer gone: wc=${contents.id}, reason=${details.reason}`)
+      })
+      return
+    }
     if (descriptor.external) {
       contents.setWindowOpenHandler(() => ({ action: 'allow' }))
       contents.on('did-fail-load', (_event, errorCode, errorDescription, _validatedURL, isMainFrame) => {
@@ -342,6 +407,11 @@ export class ShellViewManager {
     if (this.homeWebContents?.id === webContentsId) this.homeWebContents = null
     const tab = [...this.managedTabs.values()].find(item => item.webContents?.id === webContentsId)
     if (tab) {
+      if (tab.definition.kind === 'browser' && tab.definition.browserInstanceId) {
+        this.browserTabs?.detachTabWebContents(tab.definition.browserInstanceId, webContentsId)
+        this.closeTab(tab.tab.id)
+        return
+      }
       tab.webContents = null
       this.tabManager.updateTabWebContentsId(tab.tab.id, this.nextPendingWebContentsId--)
     }
@@ -380,6 +450,12 @@ export class ShellViewManager {
   }
 
   openApp(appId: string): { appId: string; tabId: string; status: 'opened' | 'activated' } {
+    if (appId === BROWSER_APP_ID) {
+      if (!this.browserTabs) throw new Error('Built-in browser is unavailable')
+      const instanceId = this.browserTabs.createManualBrowser(this.workspaceId)
+      const managed = [...this.managedTabs.values()].find(item => item.definition.browserInstanceId === instanceId)
+      return { appId, tabId: managed?.tab.id ?? instanceId, status: 'opened' }
+    }
     const externalRecord = this.externalAppRegistry.get(appId)
     const tabId = randomUUID()
     const definition = appId === SETTINGS_APP_ID
@@ -409,6 +485,140 @@ export class ShellViewManager {
       tabId: transaction.value.tab.id,
       status: transaction.value.created ? 'opened' : 'activated',
     }
+  }
+
+  openBrowserTab(
+    instanceId: string,
+    options: { initialUrl?: string; show?: boolean } = {},
+  ): { tabId: string; created: boolean } {
+    const existing = [...this.managedTabs.values()].find(item => item.definition.browserInstanceId === instanceId)
+    if (existing) {
+      if (options.show !== false) this.tabManager.activateAppTab(existing.tab.id)
+      this.emitAllState()
+      return { tabId: existing.tab.id, created: false }
+    }
+
+    const tabId = randomUUID()
+    // Unique URL keeps concurrent blank browser guests distinguishable during
+    // will-attach-webview authorization; all share the same cookie partition.
+    const initialUrl = options.initialUrl || this.buildBrowserEmptyStateEntry(instanceId)
+    const definition: AppDefinition = {
+      id: BROWSER_APP_ID,
+      title: '新标签页',
+      entry: initialUrl,
+      kind: 'browser',
+      instancePolicy: 'multiple',
+      capabilities: ['browser'],
+      status: 'ready',
+      partition: 'persist:browser-pane',
+      browserInstanceId: instanceId,
+    }
+    const transaction = this.tabManager.openAppTab({
+      definition,
+      tabId,
+      webContentsId: this.nextPendingWebContentsId--,
+      activate: options.show !== false,
+    })
+    this.managedTabs.set(tabId, { tab: transaction.value.tab, definition, webContents: null })
+    this.emitAllState()
+    return { tabId, created: true }
+  }
+
+  hasBrowserInstance(instanceId: string): boolean {
+    return [...this.managedTabs.values()].some(item => item.definition.browserInstanceId === instanceId)
+  }
+
+  focusBrowserInstance(instanceId: string): boolean {
+    const managed = [...this.managedTabs.values()].find(item => item.definition.browserInstanceId === instanceId)
+    if (!managed) return false
+    this.tabManager.activateAppTab(managed.tab.id)
+    if (this.window.isMinimized()) this.window.restore()
+    this.window.focus()
+    this.emitAllState()
+    return true
+  }
+
+  hideBrowserInstance(instanceId: string): boolean {
+    const managed = [...this.managedTabs.values()].find(item => item.definition.browserInstanceId === instanceId)
+    if (!managed) return false
+    const state = this.tabManager.getState()
+    if (state.activeTarget.kind === 'app' && state.activeTarget.tabId === managed.tab.id) {
+      this.tabManager.activateHome()
+      this.emitAllState()
+    }
+    return true
+  }
+
+  closeBrowserInstance(instanceId: string): boolean {
+    const managed = [...this.managedTabs.values()].find(item => item.definition.browserInstanceId === instanceId)
+    if (!managed) return false
+    this.closeTab(managed.tab.id)
+    return true
+  }
+
+  private createBrowserTabHost(tabId: string): BrowserTabHost {
+    let previousTarget: ShellState['activeTarget'] | null = null
+    return {
+      tabId,
+      show: () => {
+        if (!this.managedTabs.has(tabId)) return
+        const current = this.tabManager.getState().activeTarget
+        if (!(current.kind === 'app' && current.tabId === tabId)) previousTarget = current
+        this.tabManager.activateAppTab(tabId)
+        if (this.window.isMinimized()) this.window.restore()
+        this.window.focus()
+        this.emitAllState()
+      },
+      hide: () => {
+        const state = this.tabManager.getState()
+        if (state.activeTarget.kind === 'app' && state.activeTarget.tabId === tabId) {
+          if (previousTarget?.kind === 'app' && this.managedTabs.has(previousTarget.tabId)) {
+            this.tabManager.activateAppTab(previousTarget.tabId)
+          } else if (previousTarget?.kind === 'agent') {
+            this.tabManager.focusAgentTab()
+          } else {
+            this.tabManager.activateHome()
+          }
+          previousTarget = null
+          this.emitAllState()
+        }
+      },
+      close: () => this.closeTab(tabId),
+      update: (info, agentControlLabel) => {
+        if (!this.managedTabs.has(tabId)) return
+        this.tabManager.updateBrowserTab(tabId, {
+          url: info.url,
+          title: info.title || '新标签页',
+          favicon: info.favicon,
+          isLoading: info.isLoading,
+          canGoBack: info.canGoBack,
+          canGoForward: info.canGoForward,
+          agentControlLabel,
+        })
+        this.emitState()
+      },
+      setViewport: (width, height) => {
+        const applied = { width: Math.max(320, Math.round(width)), height: Math.max(240, Math.round(height)) }
+        this.tabManager.updateBrowserTab(tabId, { viewportWidth: applied.width, viewportHeight: applied.height })
+        this.emitState()
+        return applied
+      },
+      getViewport: () => {
+        const tab = this.tabManager.getState().tabs.find(candidate => candidate.id === tabId)
+        return {
+          width: tab?.browserState?.viewportWidth ?? 1200,
+          height: tab?.browserState?.viewportHeight ?? 852,
+        }
+      },
+    }
+  }
+
+  private buildBrowserEmptyStateEntry(instanceId: string): string {
+    const url = VITE_DEV_SERVER_URL
+      ? new URL('/browser-empty-state.html', VITE_DEV_SERVER_URL)
+      : pathToFileURL(join(__dirname, 'renderer/browser-empty-state.html'))
+    url.searchParams.set('browserInstanceId', instanceId)
+    return url.toString()
   }
 
   closeApp(appId: string): { appId: string; tabId?: string; status: 'closed' | 'not-open' } {
@@ -851,6 +1061,12 @@ export class ShellViewManager {
         const managed = this.managedTabs.get(effect.tab.id)
         this.managedTabs.delete(effect.tab.id)
         this.rejectWebToolWaitersForApp(effect.tab.appId, 'App closed before WebTool registered')
+        if (managed?.definition.kind === 'browser' && managed.definition.browserInstanceId) {
+          this.browserTabs?.detachTabWebContents(
+            managed.definition.browserInstanceId,
+            managed.webContents?.id ?? managed.tab.webContentsId,
+          )
+        }
         if (managed?.webContents && !managed.webContents.isDestroyed()) managed.webContents.close()
         continue
       }
@@ -904,8 +1120,14 @@ export class ShellViewManager {
   }
 
   private emitState(): void {
+    const state = this.getState()
+    for (const tab of state.tabs) {
+      if (tab.kind !== 'browser' || !tab.browserInstanceId) continue
+      const visible = state.activeTarget.kind === 'app' && state.activeTarget.tabId === tab.id
+      this.browserTabs?.setTabVisibility(tab.browserInstanceId, visible)
+    }
     if (!this.window.isDestroyed() && !this.window.webContents.isDestroyed()) {
-      this.window.webContents.send(APP_PLATFORM_CHANNELS.STATE_CHANGED, this.getState())
+      this.window.webContents.send(APP_PLATFORM_CHANNELS.STATE_CHANGED, state)
     }
   }
 

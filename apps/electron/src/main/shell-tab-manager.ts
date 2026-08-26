@@ -20,6 +20,7 @@ export interface OpenAppTabInput {
   definition: AppDefinition
   tabId: string
   webContentsId: number
+  activate?: boolean
 }
 
 export interface OpenAppTabResult {
@@ -83,7 +84,7 @@ export class ShellTabManager {
       if (input.definition.instancePolicy === 'single') {
         const existing = draft.tabs.find(tab => tab.appId === input.definition.id)
         if (existing) {
-          draft.activeTarget = { kind: 'app', tabId: existing.id }
+          if (input.activate !== false) draft.activeTarget = { kind: 'app', tabId: existing.id }
           return { value: { tab: existing, created: false } }
         }
       }
@@ -99,10 +100,31 @@ export class ShellTabManager {
         status: input.definition.status ?? 'ready',
         error: input.definition.error,
         partition: input.definition.partition,
+        browserInstanceId: input.definition.browserInstanceId,
       }
       draft.tabs.push(tab)
-      draft.activeTarget = { kind: 'app', tabId: tab.id }
+      if (input.activate !== false) draft.activeTarget = { kind: 'app', tabId: tab.id }
       return { value: { tab, created: true } }
+    })
+  }
+
+  updateBrowserTab(
+    tabId: string,
+    patch: Partial<NonNullable<AppTab['browserState']>>,
+  ): TabTransaction {
+    return this.commit(draft => {
+      const tab = this.requireTab(draft, tabId)
+      if (tab.kind !== 'browser') throw new Error(`Tab is not a browser: ${tabId}`)
+      tab.browserState = {
+        url: tab.browserState?.url ?? tab.entry,
+        title: tab.browserState?.title ?? tab.title,
+        favicon: tab.browserState?.favicon ?? null,
+        isLoading: tab.browserState?.isLoading ?? false,
+        canGoBack: tab.browserState?.canGoBack ?? false,
+        canGoForward: tab.browserState?.canGoForward ?? false,
+        ...patch,
+      }
+      if (patch.title) tab.title = patch.title
     })
   }
 

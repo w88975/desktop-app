@@ -1,6 +1,7 @@
 import type { AppDefinition, ExternalAppRecord, InstalledAppSummary } from '../shared/app-platform'
 
 export const SETTINGS_APP_ID = 'settings'
+export const BROWSER_APP_ID = 'browser'
 
 export function createSettingsDefinition(
   entry: string,
@@ -24,6 +25,13 @@ export function getInternalInstalledApps(): InstalledAppSummary[] {
     status: 'ready',
     title: '设置',
     description: '管理应用与 Agent 设置',
+    webTools: [],
+  }, {
+    appId: BROWSER_APP_ID,
+    kind: 'browser',
+    status: 'ready',
+    title: '浏览器',
+    description: '内置浏览器，支持 Agent 自动化、登录态与开发者工具能力',
     webTools: [],
   }]
 }

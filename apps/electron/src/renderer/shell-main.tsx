@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import ReactDOM from 'react-dom/client'
-import { AppWindow, Bot, ChevronLeft, ChevronRight, Home, Keyboard, LoaderCircle, LogOut, RotateCw, Settings, X } from 'lucide-react'
+import { AppWindow, Bot, ChevronLeft, ChevronRight, Globe2, Home, Keyboard, LoaderCircle, LogOut, RotateCw, Settings, X } from 'lucide-react'
 import {
   AGENT_PANEL_DEFAULT_RATIO,
   getActiveContentTabId,
@@ -54,7 +54,7 @@ function withQuery(base: string, params: Record<string, string>): string {
 
 interface SurfaceWebviewProps {
   src: string
-  preload: string
+  preload?: string
   className: string
   ariaLabel: string
   partition?: string
@@ -74,11 +74,88 @@ function SurfaceWebview({ src, preload, className, ariaLabel, partition }: Surfa
   return React.createElement('webview', {
     ref,
     src,
-    preload,
+    ...(preload ? { preload } : {}),
     className,
     'aria-label': ariaLabel,
     ...(partition ? { partition } : {}),
   })
+}
+
+function normalizeBrowserInput(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed) return 'about:blank'
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return trimmed
+  if (/^(localhost|\d{1,3}(?:\.\d{1,3}){3}|[\w-]+(?:\.[\w-]+)+)(?::\d+)?(?:\/|$)/i.test(trimmed)) {
+    return `https://${trimmed}`
+  }
+  return `https://duckduckgo.com/?q=${encodeURIComponent(trimmed)}`
+}
+
+function BrowserTabSurface({ tab, active }: { tab: ShellState['tabs'][number]; active: boolean }) {
+  const ref = useRef<Electron.WebviewTag | null>(null)
+  const [address, setAddress] = useState(tab.browserState?.url ?? tab.entry)
+
+  useEffect(() => {
+    if (tab.browserState?.url) setAddress(tab.browserState.url)
+  }, [tab.browserState?.url])
+
+  const navigate = () => {
+    const target = normalizeBrowserInput(address)
+    setAddress(target)
+    void ref.current?.loadURL(target)
+  }
+
+  const viewportStyle = tab.browserState?.viewportWidth && tab.browserState?.viewportHeight
+    ? { width: `${tab.browserState.viewportWidth}px`, height: `${tab.browserState.viewportHeight}px` }
+    : undefined
+
+  return (
+    <div className={`surface-webview browser-app-surface app-surface ${active ? 'surface-active' : ''}`} style={viewportStyle}>
+      <div className="browser-app-toolbar no-drag">
+        <button disabled={!tab.browserState?.canGoBack} onClick={() => ref.current?.goBack()} aria-label="后退"><ChevronLeft size={16} /></button>
+        <button disabled={!tab.browserState?.canGoForward} onClick={() => ref.current?.goForward()} aria-label="前进"><ChevronRight size={16} /></button>
+        <button onClick={() => tab.browserState?.isLoading ? ref.current?.stop() : ref.current?.reload()} aria-label={tab.browserState?.isLoading ? '停止' : '刷新'}>
+          {tab.browserState?.isLoading ? <X size={15} /> : <RotateCw size={15} />}
+        </button>
+        <form onSubmit={(event) => { event.preventDefault(); navigate() }}>
+          <Globe2 size={14} />
+          <input value={address} onChange={event => setAddress(event.target.value)} aria-label="地址" spellCheck={false} />
+        </form>
+      </div>
+      {React.createElement('webview', {
+        ref,
+        src: tab.entry,
+        partition: tab.partition,
+        allowpopups: 'true',
+        className: 'browser-app-webview',
+        'aria-label': tab.title,
+      })}
+      {tab.browserState?.agentControlLabel && (
+        <div className="browser-agent-overlay">
+          <span>{tab.browserState.agentControlLabel}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function BrowserTabIcon({ favicon }: { favicon?: string | null }) {
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => setFailed(false), [favicon])
+
+  if (!favicon || failed) {
+    return <Globe2 className="app-tab-icon-placeholder" size={14} />
+  }
+
+  return (
+    <img
+      className="app-tab-icon"
+      src={favicon}
+      alt=""
+      onError={() => setFailed(true)}
+    />
+  )
 }
 
 function AppLogoMenu() {
@@ -191,6 +268,7 @@ function ShellResizeSash({ panelWidth }: { panelWidth: number }) {
 function Shell() {
   const [state, setState] = useState<ShellState>(EMPTY_STATE)
   const [bootstrap, setBootstrap] = useState<WebviewSurfaceBootstrap | null>(null)
+  const tabsRef = useRef<HTMLDivElement | null>(null)
   const previousPanelVisibleRef = useRef(false)
   const previousFullVisibleRef = useRef(false)
 
@@ -278,6 +356,17 @@ function Shell() {
     previousFullVisibleRef.current = fullVisible
   }, [fullVisible, panelVisible])
 
+  useEffect(() => {
+    if (state.activeTarget.kind !== 'app') return
+    const activeTabId = state.activeTarget.tabId
+    const frame = requestAnimationFrame(() => {
+      const target = Array.from(tabsRef.current?.querySelectorAll<HTMLElement>('[data-tab-id]') ?? [])
+        .find(element => element.dataset.tabId === activeTabId)
+      target?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [state.activeTarget, state.tabs.length])
+
   return (
     <ThemeProvider activeWorkspaceId={state.workspaceId ?? null}>
       <main
@@ -316,17 +405,30 @@ function Shell() {
             <Bot size={15} /><span>Agent</span>
           </button>
           {state.tabs.length > 0 && <span className="tab-group-divider" aria-hidden="true" />}
-          <div className="tabs" role="presentation">
+          <div
+            ref={tabsRef}
+            className="tabs"
+            role="presentation"
+            onWheel={(event) => {
+              if (!tabsRef.current || tabsRef.current.scrollWidth <= tabsRef.current.clientWidth) return
+              if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return
+              tabsRef.current.scrollLeft += event.deltaY
+              event.preventDefault()
+            }}
+          >
             {state.tabs.map(tab => (
             <button
               key={tab.id}
+              data-tab-id={tab.id}
               role="tab"
               aria-selected={state.activeTarget.kind === 'app' && state.activeTarget.tabId === tab.id}
               tabIndex={state.activeTarget.kind === 'app' && state.activeTarget.tabId === tab.id ? 0 : -1}
               className={`app-tab ${state.activeTarget.kind === 'app' && state.activeTarget.tabId === tab.id ? 'active' : ''}`}
               onClick={() => void window.shellAPI.activateTab(tab.id)}
             >
-              {tab.iconUrl ? (
+              {tab.kind === 'browser' ? (
+                <BrowserTabIcon favicon={tab.browserState?.favicon} />
+              ) : tab.iconUrl ? (
                 <img className="app-tab-icon" src={tab.iconUrl} alt="" />
               ) : tab.kind === 'internal' ? (
                 <Settings className="app-tab-icon-placeholder" size={14} />
@@ -372,7 +474,7 @@ function Shell() {
                 ariaLabel="Home"
                 className={`surface-webview app-surface ${activeContentTabId === null ? 'surface-active' : ''}`}
               />
-              {state.tabs.filter(tab => tab.kind === 'built-in' || tab.kind === 'internal' || tab.status === 'ready').map(tab => (
+              {state.tabs.filter(tab => tab.kind !== 'browser' && (tab.kind === 'built-in' || tab.kind === 'internal' || tab.status === 'ready')).map(tab => (
                 <SurfaceWebview
                   key={tab.id}
                   src={tab.kind === 'built-in' ? appHostSources.tabs.get(tab.id)! : tab.entry}
@@ -382,6 +484,13 @@ function Shell() {
                   ariaLabel={tab.title}
                   partition={tab.partition}
                   className={`surface-webview app-surface ${activeContentTabId === tab.id ? 'surface-active' : ''}`}
+                />
+              ))}
+              {state.tabs.filter(tab => tab.kind === 'browser').map(tab => (
+                <BrowserTabSurface
+                  key={tab.id}
+                  tab={tab}
+                  active={activeContentTabId === tab.id}
                 />
               ))}
               {state.tabs.filter(tab => tab.kind === 'internal' && tab.status !== 'ready').map(tab => (

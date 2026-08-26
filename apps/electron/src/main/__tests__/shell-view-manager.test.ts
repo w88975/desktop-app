@@ -145,6 +145,9 @@ function createGuest(id: number, url: string) {
       return { evaluated: expression }
     }),
     getTitle: () => 'TODO',
+    isLoading: () => false,
+    canGoBack: () => false,
+    canGoForward: () => false,
     sendInputEvent: mock(() => {}),
     goBack: mock(() => {}),
     goForward: mock(() => {}),
@@ -414,6 +417,85 @@ describe('ShellViewManager webview lifecycle', () => {
       activeTarget: { kind: 'app', tabId },
       agentPanelVisible: false,
     })
+  })
+
+  it('hosts built-in browser as a multi-instance tab without privileged preload', () => {
+    const attached: Array<{ instanceId: string; contents: any; host: any }> = []
+    const detached: Array<{ instanceId: string; webContentsId: number }> = []
+    const browserTabs = {
+      createManualBrowser: mock(() => 'browser-manual'),
+      attachTabWebContents: mock((instanceId: string, contents: any, host: any) => {
+        attached.push({ instanceId, contents, host })
+      }),
+      detachTabWebContents: mock((instanceId: string, webContentsId: number) => {
+        detached.push({ instanceId, webContentsId })
+      }),
+      setTabVisibility: mock(() => {}),
+    }
+    const manager = new ShellViewManager({
+      window: createWindow() as any,
+      workspaceId: 'ws-1',
+      initialActiveTarget: 'home',
+      externalAppRegistry: createExternalAppRegistry() as any,
+      registerSurface: () => {},
+      unregisterSurface: () => {},
+      browserTabs,
+    })
+
+    const opened = manager.openBrowserTab('browser-1', { show: true })
+    const tab = manager.getState().tabs.find(candidate => candidate.id === opened.tabId)!
+    expect(tab).toMatchObject({ kind: 'browser', appId: 'browser', browserInstanceId: 'browser-1' })
+    const background = manager.openBrowserTab('browser-2', { show: false })
+    expect(manager.getState().activeTarget).toEqual({ kind: 'app', tabId: tab.id })
+    expect(manager.getState().tabs).toHaveLength(2)
+    expect(manager.getState().tabs.find(candidate => candidate.id === background.tabId)?.entry)
+      .not.toBe(tab.entry)
+
+    const preferences: Record<string, unknown> = { preload: '/should/be/removed.cjs' }
+    expect(manager.authorizeGuest(tab.entry, preferences as any, tab.partition)).toBe(true)
+    expect(preferences).toMatchObject({
+      partition: 'persist:browser-pane',
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+    })
+    expect(preferences.additionalArguments).toContain('--hxsy-browser-instance-id=browser-1')
+    expect(preferences.preload).toBeUndefined()
+
+    // Chromium may report an empty URL during did-attach-webview. It must not
+    // consume another tab's pending descriptor by FIFO guess.
+    expect(manager.attachGuest(createGuest(59, '') as any)).toBe(false)
+
+    const guest = createGuest(60, tab.entry)
+    expect(manager.attachGuest(guest as any)).toBe(true)
+    expect(guest.setWindowOpenHandler).not.toHaveBeenCalled()
+    expect(attached).toHaveLength(1)
+    expect(attached[0]).toMatchObject({ instanceId: 'browser-1', contents: guest })
+
+    attached[0].host.update({
+      id: 'browser-1',
+      url: 'https://example.com/',
+      title: 'Example',
+      favicon: null,
+      isLoading: false,
+      canGoBack: true,
+      canGoForward: false,
+      boundSessionId: null,
+      ownerType: 'manual',
+      ownerSessionId: null,
+      isVisible: true,
+      workspaceId: 'ws-1',
+    }, 'Agent — testing')
+    expect(manager.getState().tabs[0]).toMatchObject({
+      title: 'Example',
+      entry: expect.stringContaining('browser-empty-state.html'),
+      browserState: { canGoBack: true, agentControlLabel: 'Agent — testing' },
+    })
+
+    manager.closeTab(tab.id)
+    expect(detached).toContainEqual({ instanceId: 'browser-1', webContentsId: 60 })
+    expect(guest.close).toHaveBeenCalled()
+    manager.closeTab(background.tabId)
   })
 
   it('opens one trusted Settings tab and remembers its last page', () => {

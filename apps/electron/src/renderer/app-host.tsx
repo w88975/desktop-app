@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react'
 import ReactDOM from 'react-dom/client'
-import { AppWindow, FolderOpen, LoaderCircle, RefreshCw, RotateCw, Settings, Wrench } from 'lucide-react'
+import { AppWindow, FolderOpen, Globe2, LoaderCircle, RefreshCw, RotateCw, Settings, Wrench } from 'lucide-react'
 import type { InstalledAppSummary } from '../shared/app-platform'
 import './app-host.css'
 
 function AppIcon({ app }: { app: InstalledAppSummary }) {
   if (app.iconUrl) return <img src={app.iconUrl} alt="" />
   if (app.kind === 'internal') return <Settings size={22} strokeWidth={1.5} />
+  if (app.kind === 'browser') return <Globe2 size={22} strokeWidth={1.5} />
   if (app.status === 'loading' || app.status === 'discovered') {
     return <LoaderCircle className="home-app-spinner" size={22} />
   }
@@ -77,7 +78,7 @@ function HomeLauncher() {
                 <div className="home-app-title-row">
                   <h2>{app.title}</h2>
                   <div className="home-app-badges">
-                    {app.kind === 'internal' && <span className="home-app-source">内置</span>}
+                    {(app.kind === 'internal' || app.kind === 'browser') && <span className="home-app-source">内置</span>}
                     {app.sourceType && <span className="home-app-source">{SOURCE_LABELS[app.sourceType]}</span>}
                     {app.webTools.length > 0 && <span className="home-tool-count"><Wrench size={11} />{app.webTools.length}</span>}
                   </div>

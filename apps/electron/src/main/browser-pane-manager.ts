@@ -8,6 +8,7 @@
 
 import { join, parse as parsePath } from 'path'
 import { existsSync, mkdirSync } from 'fs'
+import { EventEmitter } from 'events'
 import { validateFilePath, getWorkspaceAllowedDirs } from '@craft-agent/server-core/handlers'
 import { BrowserView, BrowserWindow, app, ipcMain, nativeTheme, session, shell, type Session as ElectronSession } from 'electron'
 import { mainLog } from './logger'
@@ -29,6 +30,7 @@ import type {
   BrowserCapabilityRequest,
   ScreenshotResultWire,
 } from '@craft-agent/server-core/transport'
+import type { BrowserTabBackend, BrowserTabHost } from './browser-tab-host'
 
 export type { BrowserInstanceInfo }
 
@@ -181,6 +183,22 @@ interface BrowserInstance {
   networkLogs: BrowserNetworkEntry[]
   downloads: BrowserDownloadEntry[]
   lastLaunchToken: string | null
+  presentation: 'window' | 'tab'
+  tabHost?: BrowserTabHost
+}
+
+interface PendingTabInstance {
+  id: string
+  ownerType: 'session' | 'manual'
+  ownerSessionId: string | null
+  boundSessionId: string | null
+  workspaceId: string | null
+  show: boolean
+  agentControl: AgentControlState | null
+  initialUrl?: string
+  ready: Promise<BrowserInstance>
+  resolve: (instance: BrowserInstance) => void
+  reject: (error: Error) => void
 }
 
 interface CreateBrowserInstanceOptions {
@@ -188,6 +206,7 @@ interface CreateBrowserInstanceOptions {
   ownerType?: 'session' | 'manual'
   ownerSessionId?: string
   workspaceId?: string | null
+  initialUrl?: string
 }
 
 export interface BrowserScreenshotOptions {
@@ -325,7 +344,7 @@ interface LastBrowserAction {
 
 let instanceCounter = 0
 
-export class BrowserPaneManager implements IBrowserPaneManager {
+export class BrowserPaneManager implements IBrowserPaneManager, BrowserTabBackend {
   private instances: Map<string, BrowserInstance> = new Map()
   private destroyingIds: Set<string> = new Set()
   private stateChangeCallback: ((info: BrowserInstanceInfo) => void) | null = null
@@ -339,9 +358,15 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   private popupParentByWebContentsId = new Map<number, string>()
   private windowManager: WindowManager | null = null
   private sessionPathResolver: ((sessionId: string) => string | null) | null = null
+  private pendingTabInstances = new Map<string, PendingTabInstance>()
 
   setWindowManager(windowManager: WindowManager): void {
     this.windowManager = windowManager
+    windowManager.setBrowserTabBackend(this)
+  }
+
+  createManualBrowser(workspaceId: string): string {
+    return this.createInstance(undefined, { show: true, ownerType: 'manual', workspaceId })
   }
 
   setSessionPathResolver(fn: (sessionId: string) => string | null): void {
@@ -367,7 +392,7 @@ export class BrowserPaneManager implements IBrowserPaneManager {
     const ownerSessionId = ownerType === 'session' ? (options?.ownerSessionId ?? null) : null
     const workspaceId = options?.workspaceId ?? null
 
-    if (this.instances.has(instanceId)) {
+    if (this.instances.has(instanceId) || this.pendingTabInstances.has(instanceId)) {
       mainLog.warn(`[browser-pane] Instance already exists, reusing: ${instanceId}`)
       return instanceId
     }
@@ -375,6 +400,39 @@ export class BrowserPaneManager implements IBrowserPaneManager {
     const ses = session.fromPartition(SESSION_PARTITION)
     this.setupSessionPermissions(ses)
     this.setupSessionObservers(ses)
+
+    if (this.windowManager && workspaceId) {
+      let resolveReady!: (instance: BrowserInstance) => void
+      let rejectReady!: (error: Error) => void
+      const ready = new Promise<BrowserInstance>((resolve, reject) => {
+        resolveReady = resolve
+        rejectReady = reject
+      })
+      // Manual browser opens do not await readiness; keep early close/failure
+      // rejections from becoming unhandled while async callers still observe them.
+      void ready.catch(() => {})
+      const pending: PendingTabInstance = {
+        id: instanceId,
+        ownerType,
+        ownerSessionId,
+        boundSessionId: ownerSessionId,
+        workspaceId,
+        show: shouldShow,
+        agentControl: null,
+        initialUrl: options?.initialUrl,
+        ready,
+        resolve: resolveReady,
+        reject: rejectReady,
+      }
+      this.pendingTabInstances.set(instanceId, pending)
+      if (this.windowManager.openBrowserTab(instanceId, workspaceId, {
+        show: shouldShow,
+      })) {
+        mainLog.info(`[browser-pane] Created tab instance: ${instanceId} (show=${shouldShow}, ownerType=${ownerType})`)
+        return instanceId
+      }
+      this.pendingTabInstances.delete(instanceId)
+    }
 
     // Match background to current OS theme to prevent black/white flash on open
     const bgColor = nativeTheme.shouldUseDarkColors ? '#2b292e' : '#fafafb'
@@ -484,6 +542,7 @@ export class BrowserPaneManager implements IBrowserPaneManager {
       networkLogs: [],
       downloads: [],
       lastLaunchToken: null,
+      presentation: 'window',
     }
 
     const defaultUa = pageView.webContents.userAgent || ''
@@ -521,7 +580,204 @@ export class BrowserPaneManager implements IBrowserPaneManager {
     return instanceId
   }
 
+  attachTabWebContents(instanceId: string, contents: Electron.WebContents, host: BrowserTabHost): void {
+    const pending = this.pendingTabInstances.get(instanceId)
+    if (!pending || contents.isDestroyed()) {
+      if (!contents.isDestroyed()) contents.close()
+      return
+    }
+
+    const emitter = new EventEmitter()
+    let proxyDestroyed = false
+    let proxyVisible = pending.show
+    let proxyResizable = true
+    const windowProxy = Object.assign(emitter, {
+      webContents: contents,
+      isDestroyed: () => proxyDestroyed || contents.isDestroyed(),
+      destroy: () => {
+        if (proxyDestroyed) return
+        proxyDestroyed = true
+        host.close()
+        emitter.emit('closed')
+      },
+      close: () => host.hide(),
+      show: () => {
+        proxyVisible = true
+        host.show()
+        emitter.emit('show')
+      },
+      showInactive: () => {
+        proxyVisible = true
+        host.show()
+        emitter.emit('show')
+      },
+      hide: () => {
+        proxyVisible = false
+        host.hide()
+        emitter.emit('hide')
+      },
+      focus: () => host.show(),
+      isVisible: () => proxyVisible,
+      isMinimized: () => false,
+      restore: () => host.show(),
+      getContentSize: () => {
+        const viewport = host.getViewport()
+        return [viewport.width, viewport.height + TOOLBAR_HEIGHT] as [number, number]
+      },
+      setContentSize: (width: number, height: number) => {
+        host.setViewport(width, Math.max(100, height - TOOLBAR_HEIGHT))
+        emitter.emit('resize')
+      },
+      isResizable: () => proxyResizable,
+      setResizable: (value: boolean) => { proxyResizable = value },
+      setTopBrowserView: () => {},
+    }) as unknown as BrowserWindow
+
+    const inertWebContents = {
+      isDestroyed: () => true,
+      send: () => {},
+      on: () => inertWebContents,
+      once: () => inertWebContents,
+      removeListener: () => inertWebContents,
+      getURL: () => 'about:blank',
+      loadURL: async () => {},
+      executeJavaScript: async () => undefined,
+    } as unknown as Electron.WebContents
+    const pageView = {
+      webContents: contents,
+      setBounds: () => {},
+      setAutoResize: () => {},
+    } as unknown as BrowserView
+    const inertView = {
+      webContents: inertWebContents,
+      setBounds: () => {},
+      setAutoResize: () => {},
+    } as unknown as BrowserView
+
+    const initialPageState = this.normalizePageState(
+      contents.getURL() || 'about:blank',
+      contents.getTitle() || '新标签页',
+    )
+    const instance: BrowserInstance = {
+      id: instanceId,
+      window: windowProxy,
+      toolbarView: inertView,
+      pageView,
+      nativeOverlayView: inertView,
+      cdp: new BrowserCDP(contents),
+      currentUrl: initialPageState.url,
+      title: initialPageState.title,
+      favicon: null,
+      isLoading: contents.isLoading(),
+      canGoBack: contents.canGoBack(),
+      canGoForward: contents.canGoForward(),
+      boundSessionId: pending.boundSessionId,
+      ownerType: pending.ownerType,
+      ownerSessionId: pending.ownerSessionId,
+      workspaceId: pending.workspaceId,
+      isVisible: pending.show,
+      isHiding: false,
+      keepAliveOnWindowClose: true,
+      toolbarReady: true,
+      toolbarMenuOpen: false,
+      toolbarMenuHeight: 0,
+      toolbarMenuOverlayActive: false,
+      showOnCreate: pending.show,
+      pendingShowOnReady: false,
+      pendingShowToken: 0,
+      lastAction: null,
+      agentControl: pending.agentControl,
+      lockState: { active: false, previousResizable: true },
+      nativeOverlayReady: false,
+      themeColor: null,
+      inPageThemeTimer: null,
+      themeObserverToken: null,
+      consoleLogs: [],
+      networkLogs: [],
+      downloads: [],
+      lastLaunchToken: null,
+      presentation: 'tab',
+      tabHost: host,
+    }
+
+    const defaultUa = contents.userAgent || ''
+    const sanitizedUa = defaultUa.replace(/\sElectron\/[^\s]+/g, '')
+    if (sanitizedUa && sanitizedUa !== defaultUa) contents.setUserAgent(sanitizedUa)
+
+    this.pendingTabInstances.delete(instanceId)
+    this.instances.set(instanceId, instance)
+    this.setupWindowListeners(instance)
+    pending.resolve(instance)
+    this.emitStateChange(instance)
+    if (pending.show) this.focus(instanceId)
+    if (pending.initialUrl) {
+      void this.navigate(instanceId, pending.initialUrl).catch(error => {
+        mainLog.warn(
+          `[browser-pane] initial tab navigation failed id=${instanceId} url=${pending.initialUrl} error=${error instanceof Error ? error.message : String(error)}`,
+        )
+      })
+    }
+  }
+
+  detachTabWebContents(instanceId: string, webContentsId: number): void {
+    const pending = this.pendingTabInstances.get(instanceId)
+    if (pending) {
+      this.pendingTabInstances.delete(instanceId)
+      pending.reject(new Error(`Browser tab closed before renderer attached: ${instanceId}`))
+      this.removedCallback?.(instanceId)
+      return
+    }
+    const instance = this.instances.get(instanceId)
+    if (!instance || instance.presentation !== 'tab' || instance.pageView.webContents.id !== webContentsId) return
+    this.finalizeDestroyedInstance(instance, 'closed')
+  }
+
+  setTabVisibility(instanceId: string, visible: boolean): void {
+    const pending = this.pendingTabInstances.get(instanceId)
+    if (pending) {
+      pending.show = visible
+      return
+    }
+    const instance = this.instances.get(instanceId)
+    if (!instance || instance.presentation !== 'tab') return
+    instance.isVisible = visible
+  }
+
+  private async requireReadyInstance(id: string): Promise<BrowserInstance> {
+    const existing = this.instances.get(id)
+    if (existing) return this.requireAliveInstance(id)
+    const pending = this.pendingTabInstances.get(id)
+    if (!pending) throw new Error(`Browser instance not found: ${id}`)
+    let timeout: ReturnType<typeof setTimeout> | null = null
+    try {
+      return await Promise.race([
+        pending.ready,
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => {
+            if (this.pendingTabInstances.get(id) === pending) {
+              this.pendingTabInstances.delete(id)
+              this.windowManager?.closeBrowserTab(id)
+            }
+            const error = new Error(`Browser tab did not attach within 10s: ${id}`)
+            pending.reject(error)
+            reject(error)
+          }, 10_000)
+        }),
+      ])
+    } finally {
+      if (timeout) clearTimeout(timeout)
+    }
+  }
+
   destroyInstance(id: string): void {
+    const pending = this.pendingTabInstances.get(id)
+    if (pending) {
+      this.pendingTabInstances.delete(id)
+      this.windowManager?.closeBrowserTab(id)
+      pending.reject(new Error(`Browser instance destroyed before renderer attached: ${id}`))
+      this.removedCallback?.(id)
+      return
+    }
     const instance = this.instances.get(id)
     if (!instance) {
       mainLog.info(`[browser-pane] destroy requested for missing instance id=${id}`)
@@ -687,6 +943,24 @@ export class BrowserPaneManager implements IBrowserPaneManager {
       }
       infos.push(this.toInfo(instance))
     }
+    for (const pending of this.pendingTabInstances.values()) {
+      infos.push({
+        id: pending.id,
+        url: 'about:blank',
+        title: '新标签页',
+        favicon: null,
+        isLoading: true,
+        canGoBack: false,
+        canGoForward: false,
+        boundSessionId: pending.boundSessionId,
+        ownerType: pending.ownerType,
+        ownerSessionId: pending.ownerSessionId,
+        isVisible: pending.show,
+        agentControlActive: !!pending.agentControl?.active,
+        themeColor: null,
+        workspaceId: pending.workspaceId,
+      })
+    }
     return infos
   }
 
@@ -695,6 +969,9 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   async getInstanceAsync(id: string): Promise<BrowserInstanceSnapshot | undefined> {
+    if (!this.instances.has(id) && this.pendingTabInstances.has(id)) {
+      return this.requireReadyInstance(id)
+    }
     return this.getInstance(id)
   }
 
@@ -702,35 +979,42 @@ export class BrowserPaneManager implements IBrowserPaneManager {
     sessionId: string,
     options?: { show?: boolean; workspaceId?: string | null },
   ): Promise<string> {
-    return this.createForSession(sessionId, options)
+    const id = this.createForSession(sessionId, options)
+    await this.requireReadyInstance(id)
+    return id
   }
 
   async getOrCreateForSessionAsync(
     sessionId: string,
     options?: { workspaceId?: string | null },
   ): Promise<string> {
-    return this.getOrCreateForSession(sessionId, options)
+    const id = this.getOrCreateForSession(sessionId, options)
+    await this.requireReadyInstance(id)
+    return id
   }
 
   async focusBoundForSessionAsync(
     sessionId: string,
     options?: { workspaceId?: string | null },
   ): Promise<string> {
-    return this.focusBoundForSession(sessionId, options)
+    const id = this.focusBoundForSession(sessionId, options)
+    await this.requireReadyInstance(id)
+    return id
   }
 
   getWindowCount(): number {
-    return this.instances.size
+    return this.instances.size + this.pendingTabInstances.size
   }
 
   getBrowserWindows(): BrowserWindow[] {
     return Array.from(this.instances.values())
+      .filter((instance) => instance.presentation === 'window')
       .map((instance) => instance.window)
       .filter((win) => !win.isDestroyed())
   }
 
   async navigate(id: string, url: string): Promise<{ url: string; title: string }> {
-    const instance = this.requireAliveInstance(id)
+    const instance = await this.requireReadyInstance(id)
 
     let normalizedUrl = url.trim()
     const hasScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(normalizedUrl)
@@ -764,14 +1048,14 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   async goBack(id: string): Promise<void> {
-    const instance = this.requireAliveInstance(id)
+    const instance = await this.requireReadyInstance(id)
     if (instance.pageView.webContents.canGoBack()) {
       instance.pageView.webContents.goBack()
     }
   }
 
   async goForward(id: string): Promise<void> {
-    const instance = this.requireAliveInstance(id)
+    const instance = await this.requireReadyInstance(id)
     if (instance.pageView.webContents.canGoForward()) {
       instance.pageView.webContents.goForward()
     }
@@ -790,6 +1074,12 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   focus(id: string): void {
+    const pending = this.pendingTabInstances.get(id)
+    if (pending) {
+      pending.show = true
+      this.windowManager?.focusBrowserTab(id)
+      return
+    }
     const instance = this.instances.get(id)
     if (!instance) return
 
@@ -815,6 +1105,12 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   hide(id: string): void {
+    const pending = this.pendingTabInstances.get(id)
+    if (pending) {
+      pending.show = false
+      this.windowManager?.hideBrowserTab(id)
+      return
+    }
     const instance = this.instances.get(id)
     if (!instance) return
 
@@ -861,12 +1157,12 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   async getAccessibilitySnapshot(id: string): Promise<AccessibilitySnapshot> {
-    const instance = this.requireAliveInstance(id)
+    const instance = await this.requireReadyInstance(id)
     return instance.cdp.getAccessibilitySnapshot()
   }
 
   async clickAtCoordinates(id: string, x: number, y: number): Promise<void> {
-    const instance = this.requireAliveInstance(id)
+    const instance = await this.requireReadyInstance(id)
 
     try {
       await instance.cdp.clickAtCoordinates(x, y)
@@ -886,7 +1182,7 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   async drag(id: string, x1: number, y1: number, x2: number, y2: number): Promise<void> {
-    const instance = this.requireAliveInstance(id)
+    const instance = await this.requireReadyInstance(id)
 
     try {
       await instance.cdp.drag(x1, y1, x2, y2)
@@ -906,7 +1202,7 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   async typeText(id: string, text: string): Promise<void> {
-    const instance = this.requireAliveInstance(id)
+    const instance = await this.requireReadyInstance(id)
 
     try {
       await instance.cdp.typeText(text)
@@ -926,12 +1222,12 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   async setClipboard(id: string, text: string): Promise<void> {
-    const instance = this.requireAliveInstance(id)
+    const instance = await this.requireReadyInstance(id)
     await instance.cdp.setClipboard(text)
   }
 
   async getClipboard(id: string): Promise<string> {
-    const instance = this.requireAliveInstance(id)
+    const instance = await this.requireReadyInstance(id)
     return instance.cdp.getClipboard()
   }
 
@@ -940,7 +1236,7 @@ export class BrowserPaneManager implements IBrowserPaneManager {
     ref: string,
     options?: { waitFor?: 'none' | 'navigation' | 'network-idle'; timeoutMs?: number }
   ): Promise<void> {
-    const instance = this.requireAliveInstance(id)
+    const instance = await this.requireReadyInstance(id)
 
     try {
       const geometry = await instance.cdp.clickElement(ref)
@@ -993,7 +1289,7 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   async fillElement(id: string, ref: string, value: string): Promise<void> {
-    const instance = this.requireAliveInstance(id)
+    const instance = await this.requireReadyInstance(id)
 
     try {
       const geometry = await instance.cdp.fillElement(ref, value)
@@ -1016,7 +1312,7 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   async selectOption(id: string, ref: string, value: string): Promise<void> {
-    const instance = this.requireAliveInstance(id)
+    const instance = await this.requireReadyInstance(id)
 
     try {
       const geometry = await instance.cdp.selectOption(ref, value)
@@ -1039,6 +1335,7 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   private suspendOverlayForCapture(instance: BrowserInstance): boolean {
+    if (instance.presentation === 'tab') return false
     const shouldSuspend = !!instance.agentControl?.active
       && instance.nativeOverlayReady
 
@@ -1054,7 +1351,7 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   async screenshot(id: string, options?: BrowserScreenshotOptions): Promise<BrowserScreenshotResult> {
-    const instance = this.requireAliveInstance(id)
+    const instance = await this.requireReadyInstance(id)
 
     // Hide native agent overlay so it doesn't appear in captures
     const suspendedOverlay = this.suspendOverlayForCapture(instance)
@@ -1195,8 +1492,7 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   async screenshotRegion(id: string, target: BrowserScreenshotRegionTarget): Promise<BrowserScreenshotResult> {
-    const instance = this.instances.get(id)
-    if (!instance) throw new Error(`Browser instance not found: ${id}`)
+    const instance = await this.requireReadyInstance(id)
 
     const hasCoords = [target.x, target.y, target.width, target.height].every((v) => typeof v === 'number')
     const hasRef = typeof target.ref === 'string' && target.ref.length > 0
@@ -1504,7 +1800,7 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   async waitFor(id: string, args: BrowserWaitArgs): Promise<BrowserWaitResult> {
-    const instance = this.requireAliveInstance(id)
+    const instance = await this.requireReadyInstance(id)
 
     const timeoutMs = Math.max(100, args.timeoutMs ?? DEFAULT_WAIT_TIMEOUT_MS)
     const pollMs = Math.max(25, args.pollMs ?? DEFAULT_WAIT_POLL_MS)
@@ -1569,7 +1865,7 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   async sendKey(id: string, args: BrowserKeyArgs): Promise<void> {
-    const instance = this.requireAliveInstance(id)
+    const instance = await this.requireReadyInstance(id)
 
     const key = args.key?.trim()
     if (!key) throw new Error('browser_key requires key')
@@ -1589,7 +1885,7 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   async getDownloads(id: string, options?: BrowserDownloadOptions): Promise<BrowserDownloadEntry[]> {
-    const instance = this.requireAliveInstance(id)
+    const instance = await this.requireReadyInstance(id)
 
     const action = options?.action ?? 'list'
     const limit = Math.max(1, Math.min(200, Number(options?.limit ?? 20)))
@@ -1610,7 +1906,7 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   // validateUploadFilePath removed — uses shared validateFilePath from @craft-agent/server-core/handlers
 
   async uploadFile(id: string, ref: string, filePaths: string[]): Promise<ElementGeometry> {
-    const instance = this.requireAliveInstance(id)
+    const instance = await this.requireReadyInstance(id)
 
     const safePaths: string[] = []
     for (const p of filePaths) {
@@ -1641,12 +1937,12 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   async evaluate(id: string, expression: string): Promise<unknown> {
-    const instance = this.requireAliveInstance(id)
+    const instance = await this.requireReadyInstance(id)
     return instance.pageView.webContents.executeJavaScript(expression)
   }
 
   async detectSecurityChallenge(id: string): Promise<{ detected: boolean; provider: string; signals: string[] }> {
-    const instance = this.instances.get(id)
+    const instance = await this.requireReadyInstance(id).catch(() => undefined)
     if (!instance || instance.window.isDestroyed()) return { detected: false, provider: 'none', signals: [] }
 
     const signals: string[] = []
@@ -1717,7 +2013,7 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   async scroll(id: string, direction: 'up' | 'down' | 'left' | 'right', amount = 500): Promise<void> {
-    const instance = this.requireAliveInstance(id)
+    const instance = await this.requireReadyInstance(id)
 
     const deltaX = direction === 'left' ? -amount : direction === 'right' ? amount : 0
     const deltaY = direction === 'up' ? -amount : direction === 'down' ? amount : 0
@@ -1726,6 +2022,14 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   bindSession(id: string, sessionId: string, options?: { workspaceId?: string | null }): void {
+    const pending = this.pendingTabInstances.get(id)
+    if (pending) {
+      pending.boundSessionId = sessionId
+      pending.ownerType = 'session'
+      pending.ownerSessionId = sessionId
+      if (options?.workspaceId !== undefined) pending.workspaceId = options.workspaceId
+      return
+    }
     const instance = this.instances.get(id)
     if (instance) {
       instance.boundSessionId = sessionId
@@ -1742,6 +2046,12 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   unbindSession(id: string): void {
+    const pending = this.pendingTabInstances.get(id)
+    if (pending) {
+      pending.boundSessionId = null
+      pending.ownerType = 'manual'
+      return
+    }
     const instance = this.instances.get(id)
     if (instance) {
       instance.boundSessionId = null
@@ -1753,6 +2063,13 @@ export class BrowserPaneManager implements IBrowserPaneManager {
 
   /** Unbind all instances bound to the given session (non-destructive — window stays alive and reusable). */
   unbindAllForSession(sessionId: string): void {
+    for (const pending of this.pendingTabInstances.values()) {
+      if (pending.boundSessionId === sessionId) {
+        pending.boundSessionId = null
+        pending.ownerType = 'manual'
+        pending.ownerSessionId = pending.ownerSessionId ?? sessionId
+      }
+    }
     for (const instance of this.instances.values()) {
       if (instance.boundSessionId === sessionId) {
         instance.boundSessionId = null
@@ -1766,6 +2083,9 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   getBoundForSession(sessionId: string): string | null {
+    for (const pending of this.pendingTabInstances.values()) {
+      if (pending.ownerType === 'session' && pending.ownerSessionId === sessionId) return pending.id
+    }
     for (const instance of this.instances.values()) {
       if (instance.ownerType === 'session' && instance.ownerSessionId === sessionId) {
         if (instance.window.isDestroyed()) {
@@ -1819,6 +2139,8 @@ export class BrowserPaneManager implements IBrowserPaneManager {
       if (options?.workspaceId !== undefined) {
         const instance = this.instances.get(existing)
         if (instance) instance.workspaceId = options.workspaceId
+        const pending = this.pendingTabInstances.get(existing)
+        if (pending) pending.workspaceId = options.workspaceId
       }
       if (options?.show) {
         this.focus(existing)
@@ -1861,6 +2183,9 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   getBoundInstanceId(sessionId: string): string | null {
+    for (const pending of this.pendingTabInstances.values()) {
+      if (pending.boundSessionId === sessionId) return pending.id
+    }
     for (const [id, instance] of this.instances) {
       if (instance.boundSessionId === sessionId) {
         if (instance.window.isDestroyed()) {
@@ -1874,6 +2199,9 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   destroyForSession(sessionId: string): void {
+    for (const [id, pending] of this.pendingTabInstances) {
+      if (pending.boundSessionId === sessionId) this.destroyInstance(id)
+    }
     for (const [id, instance] of this.instances) {
       if (instance.boundSessionId === sessionId) {
         this.destroyInstance(id)
@@ -1882,6 +2210,9 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   async clearVisualsForSession(sessionId: string): Promise<void> {
+    for (const pending of this.pendingTabInstances.values()) {
+      if (pending.boundSessionId === sessionId) pending.agentControl = null
+    }
     for (const instance of this.instances.values()) {
       if (instance.boundSessionId === sessionId) {
         instance.agentControl = null
@@ -2007,6 +2338,13 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   private updateNativeOverlayState(instance: BrowserInstance): void {
+    if (instance.presentation === 'tab') {
+      instance.tabHost?.update(
+        this.toInfo(instance),
+        instance.agentControl?.active ? this.getAgentControlLabel(instance.agentControl) : undefined,
+      )
+      return
+    }
     const control = instance.agentControl
     const agentActive = !!control?.active
     const menuActive = !!instance.toolbarMenuOverlayActive
@@ -2076,6 +2414,12 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   private applyAgentControlLock(instance: BrowserInstance, active: boolean): void {
     const wantsLock = active && !!instance.agentControl?.active
 
+    if (instance.presentation === 'tab') {
+      instance.lockState.active = wantsLock
+      this.updateNativeOverlayState(instance)
+      return
+    }
+
     if (wantsLock && !instance.lockState.active) {
       instance.lockState.previousResizable = this.getWindowResizable(instance.window)
       this.setWindowResizable(instance.window, false)
@@ -2092,6 +2436,9 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   destroyAll(): void {
+    for (const id of [...this.pendingTabInstances.keys()]) {
+      this.destroyInstance(id)
+    }
     for (const id of [...this.instances.keys()]) {
       this.destroyInstance(id)
     }
@@ -2775,6 +3122,12 @@ export class BrowserPaneManager implements IBrowserPaneManager {
     meta: { displayName?: string; intent?: string },
     options?: { workspaceId?: string | null },
   ): void {
+    for (const pending of this.pendingTabInstances.values()) {
+      if (pending.boundSessionId !== sessionId) continue
+      pending.agentControl = { active: true, sessionId, displayName: meta.displayName, intent: meta.intent }
+      if (options?.workspaceId !== undefined && pending.workspaceId === null) pending.workspaceId = options.workspaceId
+      return
+    }
     for (const instance of this.instances.values()) {
       if (instance.boundSessionId === sessionId) {
         instance.agentControl = {
@@ -2806,6 +3159,9 @@ export class BrowserPaneManager implements IBrowserPaneManager {
    * Called on explicit browser_tool release and session/window teardown.
    */
   clearAgentControl(sessionId: string): void {
+    for (const pending of this.pendingTabInstances.values()) {
+      if (pending.boundSessionId === sessionId) pending.agentControl = null
+    }
     for (const instance of this.instances.values()) {
       if (instance.boundSessionId === sessionId && instance.agentControl?.active) {
         instance.agentControl = null
@@ -2818,6 +3174,15 @@ export class BrowserPaneManager implements IBrowserPaneManager {
   }
 
   clearAgentControlForInstance(instanceId: string, sessionId?: string): { released: boolean; reason?: string } {
+    const pending = this.pendingTabInstances.get(instanceId)
+    if (pending) {
+      if (sessionId && pending.boundSessionId && pending.boundSessionId !== sessionId) {
+        return { released: false, reason: `Browser tab "${instanceId}" is locked to session ${pending.boundSessionId}.` }
+      }
+      if (!pending.agentControl?.active) return { released: false, reason: 'No active agent overlay on the target tab.' }
+      pending.agentControl = null
+      return { released: true }
+    }
     const instance = this.instances.get(instanceId)
     if (!instance) {
       return { released: false, reason: `Browser window "${instanceId}" not found.` }
@@ -3265,7 +3630,6 @@ export class BrowserPaneManager implements IBrowserPaneManager {
     ])
 
     if (typeof ses.setPermissionCheckHandler === 'function') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ses.setPermissionCheckHandler((_webContents, permission: string, requestingOrigin: string, _details: any) => {
         const allowed = allow.has(permission)
         if (!allowed) {
@@ -3276,7 +3640,6 @@ export class BrowserPaneManager implements IBrowserPaneManager {
     }
 
     if (typeof ses.setPermissionRequestHandler === 'function') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ses.setPermissionRequestHandler((_webContents, permission: string, callback: (allow: boolean) => void, details: any) => {
         const allowed = allow.has(permission)
         if (!allowed) {
@@ -3396,6 +3759,7 @@ export class BrowserPaneManager implements IBrowserPaneManager {
       }
       instance.themeObserverToken = null
       instance.themeColor = null // reset for new page (batched with state push below)
+      instance.favicon = null
       const normalized = this.normalizePageState(url, pageWc.getTitle())
       instance.currentUrl = normalized.url
       instance.title = normalized.title
@@ -3506,7 +3870,8 @@ export class BrowserPaneManager implements IBrowserPaneManager {
     })
 
     pageWc.on('did-create-window', (popupWindow, details) => {
-      const popupUrl = details?.url || popupWindow.webContents.getURL?.() || 'about:blank'
+      const popupUrl = details?.url || popupWindow?.webContents?.getURL?.() || 'about:blank'
+      if (!popupWindow?.webContents) return
       this.registerPopupWindow(instance, popupWindow, popupUrl)
     })
 
@@ -3533,25 +3898,58 @@ export class BrowserPaneManager implements IBrowserPaneManager {
         return { action: 'deny' }
       }
 
+      if (instance.presentation === 'tab' && instance.workspaceId) {
+        const show = details.disposition !== 'background-tab'
+        const transferredSessionId = show ? instance.boundSessionId : null
+        const transferredControl = transferredSessionId ? instance.agentControl : null
+        if (transferredSessionId) {
+          instance.boundSessionId = null
+          instance.ownerType = 'manual'
+          instance.ownerSessionId = instance.ownerSessionId ?? transferredSessionId
+          instance.agentControl = null
+          this.reapplyAgentControlVisual(instance)
+          this.emitStateChange(instance)
+        }
+        const childId = this.createInstance(undefined, {
+          show,
+          ownerType: transferredSessionId ? 'session' : 'manual',
+          ownerSessionId: transferredSessionId ?? undefined,
+          workspaceId: instance.workspaceId,
+          initialUrl: details.url,
+        })
+        if (transferredSessionId && transferredControl?.active) {
+          this.setAgentControl(transferredSessionId, {
+            displayName: transferredControl.displayName,
+            intent: transferredControl.intent,
+          }, { workspaceId: instance.workspaceId })
+        }
+        mainLog.info(
+          `[browser-pane] window-open routed to browser tab parent=${instance.id} child=${childId} url=${details.url} show=${show}`,
+        )
+        return { action: 'deny' }
+      }
+
+      const overrideBrowserWindowOptions: Electron.BrowserWindowConstructorOptions = {
+        width: 520,
+        height: 720,
+        minWidth: 420,
+        minHeight: 520,
+        show: true,
+        autoHideMenuBar: true,
+        modal: false,
+        webPreferences: {
+          partition: SESSION_PARTITION,
+          session: pageWc.session,
+          contextIsolation: true,
+          nodeIntegration: false,
+          sandbox: true,
+        },
+      }
+      if (instance.presentation === 'window') overrideBrowserWindowOptions.parent = instance.window
+
       return {
         action: 'allow',
-        overrideBrowserWindowOptions: {
-          width: 520,
-          height: 720,
-          minWidth: 420,
-          minHeight: 520,
-          show: true,
-          autoHideMenuBar: true,
-          parent: instance.window,
-          modal: false,
-          webPreferences: {
-            partition: SESSION_PARTITION,
-            session: pageWc.session,
-            contextIsolation: true,
-            nodeIntegration: false,
-            sandbox: true,
-          },
-        },
+        overrideBrowserWindowOptions,
       }
     })
 
@@ -3608,6 +4006,13 @@ export class BrowserPaneManager implements IBrowserPaneManager {
     if (!this.instances.has(instance.id)) {
       return
     }
-    this.stateChangeCallback?.(this.toInfo(instance))
+    const info = this.toInfo(instance)
+    this.stateChangeCallback?.(info)
+    if (instance.presentation === 'tab') {
+      instance.tabHost?.update(
+        info,
+        instance.agentControl?.active ? this.getAgentControlLabel(instance.agentControl) : undefined,
+      )
+    }
   }
 }
