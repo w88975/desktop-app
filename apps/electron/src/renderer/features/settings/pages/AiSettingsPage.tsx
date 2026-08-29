@@ -1031,7 +1031,7 @@ export default function AiSettingsPage() {
   return (
     <div className="h-full flex flex-col">
       <PanelHeader title={t("settings.ai.title")} />
-      <div className="flex-1 min-h-0 mask-fade-y">
+      <div className="flex-1 min-h-0">
         <ScrollArea className="h-full">
           <div className="px-5 py-7 max-w-3xl mx-auto">
             {/* Credential Health Warning Banner */}
