@@ -9,6 +9,7 @@ $RootDir = Split-Path -Parent (Split-Path -Parent $ElectronDir)
 
 # Configuration
 $BunVersion = "bun-v1.3.9"  # Pinned version for reproducible builds
+$UvVersion = "0.10.6"
 
 Write-Host "=== Building Craft Agents Windows Installer using electron-builder ===" -ForegroundColor Cyan
 
@@ -154,6 +155,42 @@ try {
     Remove-Item -Recurse -Force $TempDir -ErrorAction SilentlyContinue
 }
 
+# 3a. Download uv for Windows x64.
+$UvTargetDir = "$ElectronDir\resources\bin\win32-x64"
+$UvTarget = "$UvTargetDir\uv.exe"
+if (-not (Test-Path $UvTarget)) {
+    Write-Host "Downloading uv $UvVersion for Windows x64..."
+    $UvTempDir = Join-Path $env:TEMP "uv-download-$(Get-Random)"
+    New-Item -ItemType Directory -Force -Path $UvTempDir | Out-Null
+    try {
+        $UvArchiveName = "uv-x86_64-pc-windows-msvc.zip"
+        $UvArchiveUrl = "https://github.com/astral-sh/uv/releases/download/$UvVersion/$UvArchiveName"
+        $UvArchive = "$UvTempDir\$UvArchiveName"
+        $UvChecksum = "$UvArchive.sha256"
+
+        Invoke-WebRequest -Uri $UvArchiveUrl -OutFile $UvArchive
+        Invoke-WebRequest -Uri "$UvArchiveUrl.sha256" -OutFile $UvChecksum
+
+        $ExpectedUvHash = ((Get-Content -Raw $UvChecksum).Trim() -split '\s+')[0].ToLower()
+        $ActualUvHash = (Get-FileHash $UvArchive -Algorithm SHA256).Hash.ToLower()
+        if ($ActualUvHash -ne $ExpectedUvHash) {
+            throw "uv checksum verification failed! Expected: $ExpectedUvHash, Got: $ActualUvHash"
+        }
+
+        Expand-Archive -Path $UvArchive -DestinationPath "$UvTempDir\extract" -Force
+        $UvSource = Get-ChildItem -Path "$UvTempDir\extract" -Filter "uv.exe" -Recurse | Select-Object -First 1
+        if (-not $UvSource) {
+            throw "uv.exe not found in $UvArchiveName"
+        }
+
+        New-Item -ItemType Directory -Force -Path $UvTargetDir | Out-Null
+        Copy-Item -Force $UvSource.FullName $UvTarget
+        Write-Host "uv installed to: $UvTarget" -ForegroundColor Green
+    } finally {
+        Remove-Item -Recurse -Force $UvTempDir -ErrorAction SilentlyContinue
+    }
+}
+
 # 4. Copy SDK from root node_modules (monorepo hoisting).
 # Since SDK 0.2.113: thin core + per-platform binary package.
 # See apps/electron/scripts/build-dmg.sh for the full rationale.
@@ -283,6 +320,37 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Main process build failed" }
 } finally {
     Pop-Location
+}
+
+# Build and stage subprocess resources required by the packaged app.
+Write-Host "  Building bundled subprocesses..."
+Push-Location $RootDir
+try {
+    bun run server:build:subprocess
+    if ($LASTEXITCODE -ne 0) { throw "Bundled agent server build failed" }
+    bun run build:wa-worker
+    if ($LASTEXITCODE -ne 0) { throw "WhatsApp worker build failed" }
+} finally {
+    Pop-Location
+}
+
+$SessionServerSource = "$RootDir\packages\session-mcp-server\dist\index.js"
+$SessionServerDest = "$ElectronDir\resources\session-mcp-server"
+if (-not (Test-Path $SessionServerSource)) { throw "Session MCP server output not found" }
+New-Item -ItemType Directory -Force -Path $SessionServerDest | Out-Null
+Copy-Item -Force $SessionServerSource "$SessionServerDest\index.js"
+
+$PiServerSource = "$RootDir\packages\pi-agent-server\dist"
+$PiServerDest = "$ElectronDir\resources\pi-agent-server"
+if (-not (Test-Path "$PiServerSource\index.js")) { throw "Pi agent server output not found" }
+Remove-Item -Recurse -Force $PiServerDest -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path $PiServerDest | Out-Null
+Copy-Item -Recurse -Force "$PiServerSource\*" $PiServerDest
+
+$KoffiSource = "$RootDir\node_modules\koffi"
+if (Test-Path $KoffiSource) {
+    New-Item -ItemType Directory -Force -Path "$PiServerDest\node_modules" | Out-Null
+    Copy-Item -Recurse -Force $KoffiSource "$PiServerDest\node_modules\koffi"
 }
 
 # Build preload
@@ -429,7 +497,7 @@ while (-not $builderSuccess -and $builderRetry -lt $maxBuilderRetries) {
         Start-Sleep -Seconds 1
     }
 
-    npx electron-builder --win --x64 2>&1 | Tee-Object -Variable builderOutput
+    npx electron-builder --win --x64 --publish never 2>&1 | Tee-Object -Variable builderOutput
 
     if ($LASTEXITCODE -eq 0) {
         $builderSuccess = $true
