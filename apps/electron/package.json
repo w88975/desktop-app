@@ -9,6 +9,7 @@
     "email": "support@craft.do"
   },
   "homepage": "https://agents.craft.do",
+  "repository": "https://github.com/w88975/desktop-app.git",
   "license": "Apache-2.0",
   "type": "module",
   "engines": {
