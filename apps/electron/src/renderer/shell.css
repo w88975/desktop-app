@@ -36,11 +36,18 @@ body {
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 0 10px 0 84px;
+  padding: 0 10px;
   background: var(--shell-background);
   -webkit-app-region: drag;
   user-select: none;
   overflow: visible;
+}
+
+/* Only macOS needs room for hiddenInset traffic lights. Windows/Linux keep
+   native window controls in the OS frame, so reserving this space creates a
+   large dead area before the app logo and navigation controls. */
+.shell-root[data-platform="macos"] .titlebar {
+  padding-left: 84px;
 }
 
 .shell-root[data-tab-context-menu-open="true"] .titlebar {

@@ -39,6 +39,9 @@ setupI18n([LanguageDetector, initReactI18next])
 const APP_REGION_INSET = 8
 const DISMISS_SHELL_OVERLAYS_EVENT = 'shell-dismiss-overlays'
 const SHELL_RESIZING_DATA_KEY = 'resizing'
+const SHELL_PLATFORM = /Macintosh|Mac OS X/.test(navigator.userAgent)
+  ? 'macos'
+  : /Windows/.test(navigator.userAgent) ? 'windows' : 'linux'
 
 interface TabPointerDragRuntime {
   pointerId: number
@@ -456,6 +459,7 @@ function Shell() {
         className="shell-root"
         data-agent-visible={(panelVisible || fullVisible) || undefined}
         data-agent-mode={fullVisible ? 'full' : panelVisible ? 'panel' : 'hidden'}
+        data-platform={SHELL_PLATFORM}
         data-tab-context-menu-open={contextMenuOpenTabId ? 'true' : undefined}
         style={{
           '--agent-panel-width': `${state.agentPanelWidthPx}px`,
