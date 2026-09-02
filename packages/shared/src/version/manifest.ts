@@ -5,7 +5,7 @@ import { FEATURE_FLAGS } from "../feature-flags";
  * Subprocess binary manifest feed. Still points at upstream and is therefore
  * gated behind FEATURE_FLAGS.autoUpdate — repoint this before enabling.
  */
-const VERSIONS_URL = 'https://agents.craft.do/electron';
+const VERSIONS_URL = 'https://docs-aiadp.hxsyai.com/electron';
 
 export async function getLatestVersion(): Promise<string | null> {
     if (!FEATURE_FLAGS.autoUpdate) {

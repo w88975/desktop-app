@@ -7,7 +7,7 @@ import {
   type ShellState,
   type WebviewSurfaceBootstrap,
 } from '../shared/app-platform'
-import { CraftAgentsSymbol } from './components/icons/CraftAgentsSymbol'
+import { HuaxiaozhuSymbol } from './components/icons/HuaxiaozhuSymbol'
 import { SquarePenRounded } from './components/icons/SquarePenRounded'
 import { TopBarButton } from './components/ui/TopBarButton'
 import {
@@ -215,7 +215,7 @@ function AppLogoMenu() {
   return (
     <div ref={rootRef} className="logo-menu-anchor">
       <TopBarButton aria-label="App menu" aria-expanded={open} isActive={open} onClick={() => setOpen(value => !value)}>
-        <CraftAgentsSymbol className="h-4 text-accent" />
+        <HuaxiaozhuSymbol className="h-4 text-accent" />
       </TopBarButton>
       {open && (
         <>
@@ -701,7 +701,7 @@ function Shell() {
                   aria-label={`${tab.title}正在加载`}
                 >
                   <div className="settings-loading-splash">
-                    <CraftAgentsSymbol className="settings-loading-symbol text-accent" />
+                    <HuaxiaozhuSymbol className="settings-loading-symbol text-accent" />
                     <p>正在加载设置</p>
                   </div>
                 </div>

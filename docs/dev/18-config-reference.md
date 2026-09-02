@@ -169,8 +169,8 @@ interface ServerConfig {
 | 变量 | 默认 | 用途 |
 |---|---|---|
 | `CRAFT_CONFIG_DIR` | `~/.craft-agent` | 数据目录（覆盖不彻底，见 13 章） |
-| `CRAFT_APP_NAME` | `Craft Agents` | 运行时应用名，多实例开发用 |
-| `CRAFT_DEEPLINK_SCHEME` | `craftagents` | 深链协议名，多实例开发用 |
+| `CRAFT_APP_NAME` | `华小竹` | 运行时应用名，多实例开发用 |
+| `CRAFT_DEEPLINK_SCHEME` | `huaxiaozhu` | 深链协议名，多实例开发用 |
 | `CRAFT_INSTANCE_NUMBER` | — | 实例编号 |
 | `CRAFT_VITE_PORT` | 自动 | Vite 开发服务器端口 |
 | `VITE_DEV_SERVER_URL` | — | Vite 开发服务器地址 |
@@ -182,7 +182,7 @@ interface ServerConfig {
 
 ## 与官方在线文档的偏差
 
-官方配置文档在 <https://agents.craft.do/docs/reference/config/config-file>。已核实的不一致：
+官方配置文档在 <https://docs-aiadp.hxsyai.com/docs/reference/config/config-file>。已核实的不一致：
 
 | 官方文档 | v0.11.4 实测 |
 |---|---|

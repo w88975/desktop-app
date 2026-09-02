@@ -1,16 +1,16 @@
 import type { ComponentEntry } from './types'
-import { CraftAgentsLogo } from '@/components/icons/CraftAgentsLogo'
-import { CraftAgentsSymbol } from '@/components/icons/CraftAgentsSymbol'
+import { HuaxiaozhuLogo } from '@/components/icons/HuaxiaozhuLogo'
+import { HuaxiaozhuSymbol } from '@/components/icons/HuaxiaozhuSymbol'
 import { PanelLeftRounded } from '@/components/icons/PanelLeftRounded'
 import { SquarePenRounded } from '@/components/icons/SquarePenRounded'
 
 export const iconComponents: ComponentEntry[] = [
   {
     id: 'craft-agents-logo',
-    name: 'CraftAgentsLogo',
+    name: 'HuaxiaozhuLogo',
     category: 'Icons',
-    description: 'Full Craft Agents branding logo with text',
-    component: CraftAgentsLogo,
+    description: 'Full Huaxiaozhu branding logo with text',
+    component: HuaxiaozhuLogo,
     props: [
       {
         name: 'className',
@@ -27,10 +27,10 @@ export const iconComponents: ComponentEntry[] = [
   },
   {
     id: 'craft-agents-symbol',
-    name: 'CraftAgentsSymbol',
+    name: 'HuaxiaozhuSymbol',
     category: 'Icons',
-    description: 'Craft Agents "E" pixel art symbol icon (brand color: #9570BE)',
-    component: CraftAgentsSymbol,
+    description: 'Huaxiaozhu "E" pixel art symbol icon (brand color: #9570BE)',
+    component: HuaxiaozhuSymbol,
     props: [
       {
         name: 'className',

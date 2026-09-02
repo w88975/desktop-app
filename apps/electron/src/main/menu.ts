@@ -18,7 +18,7 @@ let cachedClientResolver: ClientResolver | null = null
 
 /**
  * Creates and sets the application menu for macOS.
- * Includes only relevant items for the Craft Agents app.
+ * Includes only relevant items for the Huaxiaozhu app.
  *
  * Call rebuildMenu() when update state changes to refresh the menu.
  */
@@ -84,9 +84,9 @@ export async function rebuildMenu(): Promise<void> {
   const template: Electron.MenuItemConstructorOptions[] = [
     // App menu (macOS only)
     ...(isMac ? [{
-      label: 'Craft Agents',
+      label: 'Huaxiaozhu',
       submenu: [
-        { role: 'about' as const, label: i18n.t('menu.aboutCraftAgents') },
+        { role: 'about' as const, label: i18n.t('menu.aboutHuaxiaozhu') },
         ...updateMenuItems,
         { type: 'separator' as const },
         {
@@ -96,11 +96,11 @@ export async function rebuildMenu(): Promise<void> {
           click: () => { void windowManager.openSettings() }
         },
         { type: 'separator' as const },
-        { role: 'hide' as const, label: i18n.t('menu.hideCraftAgents') },
+        { role: 'hide' as const, label: i18n.t('menu.hideHuaxiaozhu') },
         { role: 'hideOthers' as const },
         { role: 'unhide' as const },
         { type: 'separator' as const },
-        { role: 'quit' as const, label: i18n.t('menu.quitCraftAgents') }
+        { role: 'quit' as const, label: i18n.t('menu.quitHuaxiaozhu') }
       ]
     }] : []),
 

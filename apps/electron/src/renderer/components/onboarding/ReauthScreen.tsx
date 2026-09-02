@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next"
 import { AlertCircle, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@craft-agent/ui"
-import { CraftAgentsSymbol } from "@/components/icons/CraftAgentsSymbol"
+import { HuaxiaozhuSymbol } from "@/components/icons/HuaxiaozhuSymbol"
 import { StepFormLayout } from "./primitives"
 
 interface ReauthScreenProps {

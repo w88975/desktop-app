@@ -118,7 +118,7 @@
 | 用户被更新到 Craft 官方版本 | `electron-builder.yml` 的 `publish.url` 没改 |
 | source 授权回调打到 Craft 服务器 | WebUI OAuth 中继地址硬编码 |
 | 分享链接指向 Craft | `branding.ts` 的 `VIEWER_URL` |
-| 与已装的 Craft Agents 抢深链协议 | `craftagents://`。注意渲染进程有十几处硬编码，不读环境变量 |
+| 与已装的 华小竹 抢深链协议 | `huaxiaozhu://`。注意渲染进程有十几处硬编码，不读环境变量 |
 | 改了 `appId` 后窗口状态/缓存重置 | Electron userData 目录随 `appId` 变化。业务数据在 `~/.craft-agent/`，不受影响 |
 | macOS 应用访问不了局域网 | `NSLocalNetworkUsageDescription` 缺失 |
 

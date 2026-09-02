@@ -173,7 +173,7 @@
 2026-08-26T08:14:01.452Z INFO   2026-08-26T08:14:01.452Z [Mode] Set permission mode to allow-all for session 260811-plain-grove (changedBy=restore, modeVersion=1)
 2026-08-26T08:14:01.452Z [Mode] Set permission mode to allow-all for session 260811-plain-grove (changedBy=restore, modeVersion=1)
 2026-08-26T08:14:01.452Z INFO   [session] Loaded 10 sessions from disk (metadata only)
-2026-08-26T08:14:01.453Z INFO   Craft Agent server listening on ws://127.0.0.1:60799
+2026-08-26T08:14:01.453Z INFO   Huaxiaozhu server listening on ws://127.0.0.1:60799
 2026-08-26T08:14:01.459Z INFO  [main] [messaging] Fan-out sink active for 1 workspace(s)
 2026-08-26T08:14:01.497Z INFO   2026-08-26T08:14:01.497Z [CredentialManager] Found llm_api_key in secure-storage
 2026-08-26T08:14:01.497Z [CredentialManager] Found llm_api_key in secure-storage

@@ -134,7 +134,7 @@ bun run packages/server/src/index.ts --generate-token   # 生成一个随机 tok
 
 ### Docker
 
-`Dockerfile.server`：`oven/bun:1.3-slim` 基础镜像，非 root 用户 `craftagents`，`EXPOSE 9100`，`ENTRYPOINT ["bun", "run", "packages/server/src/index.ts"]`，内置构建 webui 与子进程服务。
+`Dockerfile.server`：`oven/bun:1.3-slim` 基础镜像，非 root 用户 `huaxiaozhu`，`EXPOSE 9100`，`ENTRYPOINT ["bun", "run", "packages/server/src/index.ts"]`，内置构建 webui 与子进程服务。
 
 > ✅ **已修复（`[aidp]` 标记在 `Dockerfile.server`）。** 上游版本 `COPY` 了三个在本仓库中不存在的路径的 `package.json` —— `packages/craft-agents-commands`、`packages/craft-cli`、`apps/marketing`。它们存在于上游私有仓库但未随开源导出，Docker 的 `COPY` 源不存在会直接失败，镜像根本构建不过。
 >
@@ -286,7 +286,7 @@ bun run webui:dev
 启动成功时服务端会打印连接信息：
 
 ```
-Craft Agent server listening on ws://127.0.0.1:9100
+华小竹 server listening on ws://127.0.0.1:9100
 CRAFT_SERVER_URL=ws://127.0.0.1:9100
 CRAFT_SERVER_TOKEN=<你的 token>
 CRAFT_WEBUI_URL=http://0.0.0.0:9100
@@ -409,7 +409,7 @@ bun run packages/server/src/index.ts
 | Windows | 下载 NSIS 安装包，退出时静默运行 |
 | Linux | 下载 AppImage，替换当前文件 |
 
-> ⚠️ **更新源硬编码指向 Craft**：`electron-builder.yml` 的 `publish.url` 与 `auto-update.ts` 的注释都是 `https://agents.craft.do/electron/latest`。
+> ⚠️ **更新源硬编码指向 Craft**：`electron-builder.yml` 的 `publish.url` 与 `auto-update.ts` 的注释都是 `https://docs-aiadp.hxsyai.com/electron/latest`。
 >
 > **私有化分发前必须改掉**，否则用户会被推送到 Craft 官方版本上。详见 [13-branding-decoupling](13-branding-decoupling.md)。
 

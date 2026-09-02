@@ -212,9 +212,9 @@ registerPiModelResolver((piAuthProvider) =>
   piAuthProvider ? getPiModelsForAuthProvider(piAuthProvider) : getAllPiModels()
 )
 
-// Custom URL scheme for deeplinks (e.g., craftagents://auth-complete)
-// Supports multi-instance dev: CRAFT_DEEPLINK_SCHEME env var (craftagents1, craftagents2, etc.)
-const DEEPLINK_SCHEME = process.env.CRAFT_DEEPLINK_SCHEME || 'craftagents'
+// Custom URL scheme for deeplinks (e.g., huaxiaozhu://auth-complete)
+// Supports multi-instance dev: CRAFT_DEEPLINK_SCHEME env var (huaxiaozhu1, huaxiaozhu2, etc.)
+const DEEPLINK_SCHEME = process.env.CRAFT_DEEPLINK_SCHEME || 'huaxiaozhu'
 
 let windowManager: WindowManager | null = null
 let sessionManager: SessionManager | null = null
@@ -236,10 +236,10 @@ let mainWindowOpenPending = false
 let messagingHandle: MessagingBootstrapHandle | null = null
 
 // Set app name early (before app.whenReady) to ensure correct macOS menu bar title
-// Supports multi-instance dev: CRAFT_APP_NAME env var (e.g., "Craft Agents [1]")
-app.setName(process.env.CRAFT_APP_NAME || 'Craft Agents')
+// Supports multi-instance dev: CRAFT_APP_NAME env var (e.g., "Huaxiaozhu [1]")
+app.setName(process.env.CRAFT_APP_NAME || '华小竹')
 
-// Register as default protocol client for craftagents:// URLs
+// Register as default protocol client for huaxiaozhu:// URLs
 // This must be done before app.whenReady() on some platforms
 if (process.defaultApp) {
   // Development mode: need to pass the app path
@@ -1407,7 +1407,7 @@ app.whenReady().then(async () => {
         type: 'error',
         title: 'Update failed',
         message: 'The update could not be installed.',
-        detail: 'Craft Agents will restart now. The update will be retried on the next launch.',
+        detail: 'Huaxiaozhu will restart now. The update will be retried on the next launch.',
       })
       app.relaunch()
       app.exit(0)

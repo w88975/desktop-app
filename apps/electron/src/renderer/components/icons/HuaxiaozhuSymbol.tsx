@@ -1,12 +1,12 @@
-interface CraftAgentsSymbolProps {
+interface HuaxiaozhuSymbolProps {
   className?: string
 }
 
 /**
- * Craft Agents "E" symbol - the small pixel art icon
+ * Huaxiaozhu "E" symbol - the small pixel art icon
  * Uses accent color from theme (currentColor from className)
  */
-export function CraftAgentsSymbol({ className }: CraftAgentsSymbolProps) {
+export function HuaxiaozhuSymbol({ className }: HuaxiaozhuSymbolProps) {
   return (
     <svg
       viewBox="452 368 115 129"

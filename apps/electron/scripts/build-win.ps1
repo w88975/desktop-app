@@ -11,7 +11,7 @@ $RootDir = Split-Path -Parent (Split-Path -Parent $ElectronDir)
 $BunVersion = "bun-v1.3.9"  # Pinned version for reproducible builds
 $UvVersion = "0.10.6"
 
-Write-Host "=== Building Craft Agents Windows Installer using electron-builder ===" -ForegroundColor Cyan
+Write-Host "=== Building Huaxiaozhu Windows Installer using electron-builder ===" -ForegroundColor Cyan
 
 # Debug: System information
 Write-Host ""

@@ -38,7 +38,7 @@ jobs:
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: Craft-Agents-Windows-x64-${{ github.sha }}
+          name: Huaxiaozhu-Windows-x64-${{ github.sha }}
           path: apps/electron/release/*.exe
           if-no-files-found: error
           retention-days: 14

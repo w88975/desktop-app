@@ -90,12 +90,12 @@ bun run sort-locales        # 自动排序
 
 ## 配置目录与已安装版冲突
 
-dev 版和正式版 `Craft Agents.app` 共用同一份数据：
+dev 版和正式版 `Huaxiaozhu.app` 共用同一份数据：
 
 - 配置：`~/.craft-agent/`
 - Electron user data：`~/Library/Application Support/@craft-agent/electron/`
 
-开发时改数据会影响正式版。需要隔离就把仓库目录名加数字后缀（如 `aidp-desktop-1`），脚本会自动切到 `~/.craft-agent-1`、端口 `1173`、应用名 `Craft Agents [1]`。
+开发时改数据会影响正式版。需要隔离就把仓库目录名加数字后缀（如 `aidp-desktop-1`），脚本会自动切到 `~/.craft-agent-1`、端口 `1173`、应用名 `Huaxiaozhu [1]`。
 
 ## 日志
 

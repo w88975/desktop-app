@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { CraftAgentsSymbol } from '@/components/icons/CraftAgentsSymbol'
+import { HuaxiaozhuSymbol } from '@/components/icons/HuaxiaozhuSymbol'
 import { MOBILE_PATTERN, VERIFICATION_CODE_PATTERN, type AuthState } from '../shared/auth'
 import './index.css'
 import './login.css'
@@ -87,7 +87,7 @@ function LoginForm({ initialState }: { initialState: AuthState }) {
   return (
     <form className="login-form" onSubmit={submit}>
       <div className="login-brand">
-        <CraftAgentsSymbol className="login-brand-symbol" />
+        <HuaxiaozhuSymbol className="login-brand-symbol" />
         <div>
           <h1>欢迎使用华小竹</h1>
           <p>登录后开始使用</p>

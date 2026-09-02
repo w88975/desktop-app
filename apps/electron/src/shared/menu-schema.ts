@@ -277,7 +277,7 @@ export const ROOT_MENU = {
     type: 'action',
     id: 'quit',
     actionId: 'app.quit',
-    labelKey: 'menu.quitCraftAgents',
+    labelKey: 'menu.quitHuaxiaozhu',
     shortcut: 'CmdOrCtrl+Q',
     shortcutDisplayMac: '⌘Q',
     shortcutDisplayOther: 'Ctrl+Q',

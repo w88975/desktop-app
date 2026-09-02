@@ -14,7 +14,7 @@ import { setInstalledAppsPromptProvider } from '../installed-apps'
 import type { ProjectPromptContext } from '../../projects/types.ts'
 
 const GIT_CONVENTIONS_HEADING = '## Git Conventions'
-const CO_AUTHOR_TRAILER = 'Co-Authored-By: Craft Agent <agents-noreply@craft.do>'
+const CO_AUTHOR_TRAILER = 'Co-Authored-By: Huaxiaozhu <agents-noreply@craft.do>'
 
 afterEach(() => setInstalledAppsPromptProvider(null))
 
@@ -119,7 +119,7 @@ describe('includeCoAuthoredBy handling', () => {
       '/tmp/workspace',
       '/tmp/workspace',
       undefined,
-      'Craft Agents Backend'
+      'Huaxiaozhu Backend'
       // 7th arg omitted — must not regress to `true` default
     )
 

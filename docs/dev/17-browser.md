@@ -6,7 +6,7 @@ Agent 可以驱动主 Shell 中的内置 Browser App Tab —— 打开网页、�
 
 Browser 是 `kind: 'browser'` 的一等内置 App，支持多实例。每个 Tab 直接托管一个无特权 Electron `<webview>` guest；可信 toolbar 与 Agent 控制浮层由 Shell DOM 渲染。无 Shell 的测试/兼容路径仍可回退到旧 `BrowserWindow + BrowserView` host。
 
-> **本篇讲代码结构。** 「怎么用这个功能」「API 发现的实操套路」见官方文档 <https://agents.craft.do/docs/browser/overview>（含 overview、API Discovery、Examples 三篇）。
+> **本篇讲代码结构。** 「怎么用这个功能」「API 发现的实操套路」见官方文档 <https://docs-aiadp.hxsyai.com/docs/browser/overview>（含 overview、API Discovery、Examples 三篇）。
 
 ## 为什么值得单独一章
 

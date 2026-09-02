@@ -110,7 +110,7 @@ Electron 桌面应用、headless 服务端（可 Docker 部署）、浏览器 We
 
 ## 官方在线文档
 
-Craft 维护了一套面向**最终用户**的在线文档：<https://agents.craft.do/docs>，共 13 个分区 44 页。全量索引在 <https://agents.craft.do/docs/llms.txt>（纯文本，适合直接喂给 AI 助手）。
+Craft 维护了一套面向**最终用户**的在线文档：<https://docs-aiadp.hxsyai.com/docs>，共 13 个分区 44 页。全量索引在 <https://docs-aiadp.hxsyai.com/docs/llms.txt>（纯文本，适合直接喂给 AI 助手）。
 
 它与本套文档的关系：
 

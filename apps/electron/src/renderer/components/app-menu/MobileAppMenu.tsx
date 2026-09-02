@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import * as Icons from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
 import { useRegisterDismissibleLayer } from '@/context/DismissibleLayerContext'
-import { CraftAgentsSymbol } from '../icons/CraftAgentsSymbol'
+import { HuaxiaozhuSymbol } from '../icons/HuaxiaozhuSymbol'
 import { SquarePenRounded } from '../icons/SquarePenRounded'
 import { TopBarButton } from '../ui/TopBarButton'
 import { MobileMenuPage } from './MobileMenuPage'
@@ -169,7 +169,7 @@ export function MobileAppMenu(props: AppMenuProps) {
         data-state={state.isOpen ? 'open' : 'closed'}
         className="rounded-[8px]"
       >
-        <CraftAgentsSymbol className="!h-5 !w-auto text-accent" />
+        <HuaxiaozhuSymbol className="!h-5 !w-auto text-accent" />
       </TopBarButton>
       <MobileMenuSheet
         state={state}

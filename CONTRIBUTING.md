@@ -1,6 +1,6 @@
-# Contributing to Craft Agents
+# Contributing to Huaxiaozhu
 
-Thank you for your interest in contributing to Craft Agents! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to Huaxiaozhu! This document provides guidelines and instructions for contributing.
 
 ## Getting Started
 

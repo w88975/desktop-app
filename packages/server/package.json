@@ -1,7 +1,7 @@
 {
   "name": "@craft-agent/server",
   "version": "0.0.1",
-  "description": "Standalone headless Craft Agent server (Bun runtime)",
+  "description": "Standalone headless Huaxiaozhu server (Bun runtime)",
   "type": "module",
   "main": "src/index.ts",
   "bin": {
@@ -14,11 +14,10 @@
     "bun": ">=1.0.0"
   },
   "author": {
-    "name": "Craft Docs Ltd.",
-    "email": "support@craft.do"
+    "name": "Huaxisy"
   },
   "license": "Apache-2.0",
-  "homepage": "https://agents.craft.do",
+  "homepage": "https://docs-aiadp.hxsyai.com/",
   "scripts": {
     "start": "bun run src/index.ts",
     "generate-token": "bun run src/index.ts --generate-token",

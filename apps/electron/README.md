@@ -1,6 +1,6 @@
-# Craft Agents Electron App
+# Huaxiaozhu Electron App
 
-The primary desktop interface for Craft Agents, built with Electron + React. Provides a multi-session inbox with chat interface for interacting with Claude via Craft workspaces.
+The primary desktop interface for Huaxiaozhu, built with Electron + React. Provides a multi-session inbox with chat interface for interacting with Claude via Craft workspaces.
 
 ## Quick Start
 
@@ -240,14 +240,14 @@ navigate(routes.sidebar.flagged())        // Show flagged
 
 ### Deep Links
 
-External apps can navigate using `craftagents://` URLs:
+External apps can navigate using `huaxiaozhu://` URLs:
 
 ```
-craftagents://settings
-craftagents://allSessions/session/session123
-craftagents://sources/source/github
-craftagents://action/new-chat
-craftagents://workspace/{id}/allSessions/session/abc123
+huaxiaozhu://settings
+huaxiaozhu://allSessions/session/session123
+huaxiaozhu://sources/source/github
+huaxiaozhu://action/new-chat
+huaxiaozhu://workspace/{id}/allSessions/session/abc123
 ```
 
 See `CLAUDE.md` for complete route reference.

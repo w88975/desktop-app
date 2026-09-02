@@ -4,7 +4,7 @@
 
 把 Agent 会话接到即时通讯软件，让人在飞书 / Telegram / WhatsApp 里直接跟 Agent 对话。
 
-> **本篇讲代码结构与扩展点。** 「怎么在飞书开放平台建机器人」这类操作步骤见官方文档 <https://agents.craft.do/docs/messaging/overview>（含 Lark/Feishu、Telegram、WhatsApp 三篇），本篇不复述。
+> **本篇讲代码结构与扩展点。** 「怎么在飞书开放平台建机器人」这类操作步骤见官方文档 <https://docs-aiadp.hxsyai.com/docs/messaging/overview>（含 Lark/Feishu、Telegram、WhatsApp 三篇），本篇不复述。
 
 ## 先分清两条链路
 

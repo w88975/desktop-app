@@ -132,7 +132,7 @@ sources/linear/
 - **Renew endpoint**：自定义 bearer token API 可以配 `api.renewEndpoint`，把当前 token 发过去换新的，不需要 refresh token
 - `isRefreshableSource()` 是「这个 source 能不能自动刷新」的**唯一判断入口**，`TokenRefreshManager` 定期驱动
 
-> WebUI 的 source OAuth 走一个固定的中继回调地址 `https://agents.craft.do/auth/callback` —— **这是必须解耦的 Craft 绑定点之一**，见 [13-branding-decoupling](13-branding-decoupling.md)。
+> WebUI 的 source OAuth 走一个固定的中继回调地址 `https://api-aidp.hxsyai.com/v1/auth/callback` —— **这是必须解耦的 Craft 绑定点之一**，见 [13-branding-decoupling](13-branding-decoupling.md)。
 
 ## MCP 连接池
 

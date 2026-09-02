@@ -16,8 +16,8 @@
 | 🔴 **必改** | 自动更新源 | 用户被推送到 Craft 官方版本，直接覆盖我们的应用 |
 | 🔴 **必改** | WebUI OAuth 中继地址 | source 授权回调打到 Craft 的服务器 |
 | 🔴 **必改** | Sentry DSN | 崩溃数据发到 Craft（或我们自己的第三方账号） |
-| 🟠 **应改** | appId / productName / 应用名 | 与已装的 Craft Agents 冲突；品牌不对 |
-| 🟠 **应改** | 深链协议 `craftagents://` | 与已装的 Craft Agents 抢协议注册 |
+| 🟠 **应改** | appId / productName / 应用名 | 与已装的 华小竹 冲突；品牌不对 |
+| 🟠 **应改** | 深链协议 `huaxiaozhu://` | 与已装的 华小竹 抢协议注册 |
 | 🟠 **应改** | Viewer 分享域名 | 分享链接指向 Craft |
 | 🟡 **可改** | 数据目录 `~/.craft-agent/` | 与已装版本共用数据（可能正是你想要的，也可能不是） |
 | 🟡 **可改** | 包名 `@craft-agent/*` | 纯内部命名，改动收益低、成本高 |
@@ -30,7 +30,7 @@
 | | |
 |---|---|
 | 位置 | `apps/electron/electron-builder.yml` 的 `publish.url`；`apps/electron/src/main/auto-update.ts`（注释） |
-| 当前值 | `https://agents.craft.do/electron/latest` |
+| 当前值 | `https://docs-aiadp.hxsyai.com/electron/latest` |
 | 同步影响 | 低 —— 单行配置，冲突面小 |
 | 数据兼容 | 无影响 |
 
@@ -43,7 +43,7 @@
 | | |
 |---|---|
 | 位置 | `packages/shared/src/auth/oauth-relay.ts`（相关逻辑）；行为描述见 `packages/shared/CLAUDE.md` |
-| 当前值 | 固定重定向到 `https://agents.craft.do/auth/callback` |
+| 当前值 | 固定重定向到 `https://api-aidp.hxsyai.com/v1/auth/callback` |
 | 同步影响 | 中 —— 涉及 OAuth 状态信封的处理 |
 | 数据兼容 | 已授权的 source 不受影响；新授权流程会走新地址 |
 
@@ -70,12 +70,12 @@ WebUI 的 source OAuth 用一个**稳定的中继回调地址**，真正的部�
 
 | 项 | 位置 | 当前值 |
 |---|---|---|
-| `appId` | `apps/electron/electron-builder.yml` | `com.lukilabs.craft-agent` |
-| `productName` | 同上 | `Craft Agents` |
-| `copyright` | 同上 | `Copyright © 2026 Craft Docs Ltd.` |
-| Linux `maintainer` | 同上 | `Craft Docs Ltd. <support@craft.do>` |
-| 运行时应用名 | `apps/electron/src/main/index.ts` | `app.setName(process.env.CRAFT_APP_NAME \|\| 'Craft Agents')` |
-| `homepage` / `author.email` | `apps/electron/package.json` | `https://agents.craft.do` / `support@craft.do` |
+| `appId` | `apps/electron/electron-builder.yml` | `com.huaxisy.huaxiaozhu` |
+| `productName` | 同上 | `华小竹` |
+| `copyright` | 同上 | `Copyright © 2026 Huaxisy` |
+| Linux `maintainer` | 同上 | `Huaxisy` |
+| 运行时应用名 | `apps/electron/src/main/index.ts` | `app.setName(process.env.CRAFT_APP_NAME \|\| '华小竹')` |
+| `homepage` / `author` | `apps/electron/package.json` | `https://docs-aiadp.hxsyai.com/` / `Huaxisy` |
 
 | | |
 |---|---|
@@ -84,20 +84,20 @@ WebUI 的 source OAuth 用一个**稳定的中继回调地址**，真正的部�
 
 **`app.setName()` 已经支持 `CRAFT_APP_NAME` 环境变量覆盖** —— 这是上游为多实例开发留的口子，我们可以直接复用，不必改代码。
 
-`Craft Agents` 这个字面量在源码里出现 216 次（含 i18n 文案、注释、测试）。不要全局替换 —— 先决定哪些是用户可见的、哪些只是注释。
+`华小竹` 这个字面量在源码里出现 216 次（含 i18n 文案、注释、测试）。不要全局替换 —— 先决定哪些是用户可见的、哪些只是注释。
 
 ### 🟠 5. 深链协议
 
 | | |
 |---|---|
 | 位置 | `apps/electron/src/main/index.ts` 的 `DEEPLINK_SCHEME` |
-| 当前值 | `process.env.CRAFT_DEEPLINK_SCHEME \|\| 'craftagents'` |
+| 当前值 | `process.env.CRAFT_DEEPLINK_SCHEME \|\| 'huaxiaozhu'` |
 | 同步影响 | 低 |
-| 数据兼容 | 已分享出去的 `craftagents://` 链接会失效 |
+| 数据兼容 | 已分享出去的 `huaxiaozhu://` 链接会失效 |
 
 **同样已支持环境变量覆盖**（`CRAFT_DEEPLINK_SCHEME`），上游为多实例开发留的。
 
-但注意：**渲染进程里有十几处硬编码拼 `craftagents://` 字符串**，它们不读这个环境变量：
+但注意：**渲染进程里有十几处硬编码拼 `huaxiaozhu://` 字符串**，它们不读这个环境变量：
 
 ```
 renderer/components/ui/EditPopover.tsx
@@ -117,9 +117,9 @@ renderer/pages/settings/SettingsNavigator.tsx
 
 | 项 | 位置 | 当前值 |
 |---|---|---|
-| `VIEWER_URL` | `packages/shared/src/branding.ts` | `https://agents.craft.do` |
-| Viewer 开发代理 | `apps/viewer/vite.config.ts` | `target: 'https://agents.craft.do'` |
-| Viewer 页头链接 | `apps/viewer/src/components/Header.tsx` | `https://agents.craft.do` |
+| `VIEWER_URL` | `packages/shared/src/branding.ts` | `https://docs-aiadp.hxsyai.com` |
+| Viewer 开发代理 | `apps/viewer/vite.config.ts` | `target: 'https://docs-aiadp.hxsyai.com'` |
+| Viewer 页头链接 | `apps/viewer/src/components/Header.tsx` | `https://docs-aiadp.hxsyai.com` |
 
 | | |
 |---|---|
@@ -169,8 +169,8 @@ renderer/pages/settings/SettingsNavigator.tsx
 
 | 项 | 位置 |
 |---|---|
-| 帮助文档链接 | `apps/electron/src/shared/menu-schema.ts`、`renderer/components/app-shell/TopBar.tsx`、`renderer/pages/ChatPage.tsx` —— 都指向 `https://agents.craft.do/docs*` |
-| i18n 文案里的品牌名 | `packages/shared/src/i18n/locales/*.json`。上游约定是「品牌名保持英文」（Craft、Craft Agents、Workspace…） |
+| 帮助文档链接 | `apps/electron/src/shared/menu-schema.ts`、`renderer/components/app-shell/TopBar.tsx`、`renderer/pages/ChatPage.tsx` —— 都指向 `https://docs-aiadp.hxsyai.com/docs*` |
+| i18n 文案里的品牌名 | `packages/shared/src/i18n/locales/*.json`。上游约定是「品牌名保持英文」（Craft、华小竹、Workspace…） |
 | ASCII logo | `packages/shared/src/branding.ts`，用于 OAuth 回调页 |
 | 应用图标 | `apps/electron/resources/icon.icns` / `.ico` / `.png`、`dmg-background.tiff` |
 | macOS Liquid Glass 图标 | `apps/electron/scripts/afterPack.cjs` 编译 Assets.car，`CFBundleIconName: AppIcon` |
@@ -199,7 +199,7 @@ renderer/pages/settings/SettingsNavigator.tsx
 
 ```bash
 # 域名与协议
-grep -rn "craft\.do\|craftagents://\|agents\.craft" \
+grep -rn "craft\.do\|huaxiaozhu://\|agents\.craft" \
   --include="*.ts" --include="*.tsx" --include="*.yml" --include="*.json" \
   apps packages scripts | grep -v node_modules | grep -v "/dist/"
 
@@ -207,5 +207,5 @@ grep -rn "craft\.do\|craftagents://\|agents\.craft" \
 grep -rn "'\.craft-agent'" --include="*.ts" apps packages | grep -v node_modules
 
 # 品牌字面量
-grep -rn "Craft Agents" --include="*.ts" --include="*.tsx" apps packages | grep -v node_modules
+grep -rn "华小竹" --include="*.ts" --include="*.tsx" apps packages | grep -v node_modules
 ```

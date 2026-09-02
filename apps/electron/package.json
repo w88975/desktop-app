@@ -1,14 +1,13 @@
 {
   "name": "@craft-agent/electron",
   "version": "0.0.1",
-  "description": "Electron desktop app for Craft Agents",
+  "description": "Electron desktop app for Huaxiaozhu",
   "main": "dist/main.cjs",
   "private": true,
   "author": {
-    "name": "Craft Docs Ltd.",
-    "email": "support@craft.do"
+    "name": "Huaxisy"
   },
-  "homepage": "https://agents.craft.do",
+  "homepage": "https://docs-aiadp.hxsyai.com/",
   "repository": "https://github.com/w88975/desktop-app.git",
   "license": "Apache-2.0",
   "type": "module",

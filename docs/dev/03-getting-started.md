@@ -93,9 +93,9 @@ Electron 自身的数据（缓存、localStorage）在 `~/Library/Application Su
 
 ### ⚠️ 开发版和正式版共用同一份数据
 
-如果机器上装了正式版 `Craft Agents.app`，它和你的 dev 版读写**同一个** `~/.craft-agent/`。开发时改坏数据会影响正式版。
+如果机器上装了正式版 `华小竹.app`，它和你的 dev 版读写**同一个** `~/.craft-agent/`。开发时改坏数据会影响正式版。
 
-需要隔离时，把仓库目录名加数字后缀（如 `aidp-desktop-1`），脚本会自动切到 `~/.craft-agent-1`、端口 `1173`、应用名 `Craft Agents [1]`。
+需要隔离时，把仓库目录名加数字后缀（如 `aidp-desktop-1`），脚本会自动切到 `~/.craft-agent-1`、端口 `1173`、应用名 `华小竹 [1]`。
 
 ## 日志
 

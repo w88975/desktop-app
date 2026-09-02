@@ -42,7 +42,7 @@ export function isDeveloperFeedbackEnabled(): boolean {
  *
  * Defaults to disabled. Override with CRAFT_FEATURE_CRAFT_AGENTS_CLI=1|0.
  */
-export function isCraftAgentsCliEnabled(): boolean {
+export function isHuaxiaozhuCliEnabled(): boolean {
   const override = parseBooleanEnv(getEnv('CRAFT_FEATURE_CRAFT_AGENTS_CLI'));
   if (override !== undefined) return override;
   return false;
@@ -63,7 +63,7 @@ export function isEmbeddedServerEnabled(): boolean {
  * Runtime-evaluated check for the in-app auto-update pipeline.
  *
  * Disabled: this fork has no release channel of its own, and the upstream feed
- * (agents.craft.do) must never be reached — it would ship Craft Agents builds to
+ * upstream vendor update services must never be reached — they could ship incompatible builds to
  * our users. Everything stays wired up behind this flag; flip it (or set
  * CRAFT_FEATURE_AUTO_UPDATE=1) once our own update server is in place, after
  * repointing `publish.url` in apps/electron/electron-builder.yml and
@@ -79,7 +79,7 @@ export function isAutoUpdateEnabled(): boolean {
  * Runtime-evaluated check for publishing sessions to the web viewer.
  *
  * Disabled: "share online" POSTs the full session transcript to the upstream
- * viewer service (agents.craft.do/s/api). We have no viewer deployment of our
+ * upstream viewer service. We have no viewer deployment of our
  * own, so leaving it on means user conversations leave for a third party.
  * Re-enable only after VIEWER_URL (packages/shared/src/branding.ts) points at
  * our own service.
@@ -108,7 +108,7 @@ export const FEATURE_FLAGS = {
    * Defaults to disabled. Override with CRAFT_FEATURE_CRAFT_AGENTS_CLI=1|0.
    */
   get craftAgentsCli(): boolean {
-    return isCraftAgentsCliEnabled();
+    return isHuaxiaozhuCliEnabled();
   },
   /**
    * Enable embedded server settings page.
