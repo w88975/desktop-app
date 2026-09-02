@@ -439,6 +439,8 @@ client.onConnectionStateChanged((state) => {
   ipcRenderer.on(APP_PLATFORM_CHANNELS.AGENT_COMMAND_RECEIVED, handler)
   return () => ipcRenderer.removeListener(APP_PLATFORM_CHANNELS.AGENT_COMMAND_RECEIVED, handler)
 }
+;(api as ElectronAPI).syncAgentConversation = (sessionId: string) =>
+  ipcRenderer.invoke(APP_PLATFORM_CHANNELS.SYNC_AGENT_CONVERSATION, sessionId)
 ;(api as ElectronAPI).onAgentNavigationIntent = (callback: (intent: AgentNavigationIntent) => void) => {
   const handler = (_event: Electron.IpcRendererEvent, intent: AgentNavigationIntent) => callback(intent)
   ipcRenderer.on(APP_PLATFORM_CHANNELS.AGENT_NAVIGATION_INTENT_RECEIVED, handler)

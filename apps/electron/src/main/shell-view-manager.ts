@@ -92,6 +92,8 @@ export class ShellViewManager {
   private agentWebContents: WebContents | null = null
   private agentRendererReady = false
   private agentPanelRendererReady = false
+  private agentFullConversationSessionId: string | null = null
+  private agentPanelConversationSessionId: string | null = null
   private homeWebContents: WebContents | null = null
   private settingsWebContents: WebContents | null = null
   private lastSettingsSubpage: SettingsSubpage = 'app'
@@ -297,6 +299,7 @@ export class ShellViewManager {
       if (this.agentWebContents && !this.agentWebContents.isDestroyed()) return false
       this.agentWebContents = contents
       this.agentRendererReady = false
+      this.agentFullConversationSessionId = null
     } else if (descriptor.kind === 'home') {
       if (this.homeWebContents && !this.homeWebContents.isDestroyed()) return false
       this.homeWebContents = contents
@@ -379,6 +382,7 @@ export class ShellViewManager {
     if (kind === 'agent') {
       contents.on('did-start-navigation', () => {
         this.agentRendererReady = false
+        this.agentFullConversationSessionId = null
       })
     }
     contents.on('render-process-gone', (_event, details) => {
@@ -403,6 +407,7 @@ export class ShellViewManager {
     if (this.agentWebContents?.id === webContentsId) {
       this.agentWebContents = null
       this.agentRendererReady = false
+      this.agentFullConversationSessionId = null
     }
     if (this.homeWebContents?.id === webContentsId) this.homeWebContents = null
     const tab = [...this.managedTabs.values()].find(item => item.webContents?.id === webContentsId)
@@ -1025,7 +1030,13 @@ export class ShellViewManager {
   }
 
   focusAgentTab(intent?: AgentNavigationIntent): void {
-    const transaction = this.tabManager.focusAgentTab(intent)
+    const synchronizedIntent = intent ?? (
+      this.agentPanelConversationSessionId
+      && this.agentPanelConversationSessionId !== this.agentFullConversationSessionId
+        ? { type: 'conversation' as const, sessionId: this.agentPanelConversationSessionId }
+        : undefined
+    )
+    const transaction = this.tabManager.focusAgentTab(synchronizedIntent)
     this.emitAllState()
     this.applyTabEffects(transaction.effects)
   }
@@ -1072,6 +1083,36 @@ export class ShellViewManager {
       this.agentWebContents.send(APP_PLATFORM_CHANNELS.AGENT_COMMAND_RECEIVED, command)
     } else {
       this.queuedAgentCommands.push(command)
+    }
+  }
+
+  syncAgentConversation(sourceWebContentsId: number, sessionId: string): void {
+    const normalizedSessionId = sessionId.trim()
+    if (!normalizedSessionId) throw new Error('Invalid Agent conversation session ID')
+    const sourceIsPanel = sourceWebContentsId === this.window.webContents.id
+    const sourceIsFull = this.agentWebContents?.id === sourceWebContentsId
+    if (!sourceIsPanel && !sourceIsFull) {
+      throw new Error(`Unknown Agent renderer: ${sourceWebContentsId}`)
+    }
+    const intent: AgentNavigationIntent = { type: 'conversation', sessionId: normalizedSessionId }
+
+    if (sourceIsPanel) {
+      this.agentPanelConversationSessionId = normalizedSessionId
+      if (this.agentFullConversationSessionId === normalizedSessionId) return
+      if (this.agentRendererReady && this.agentWebContents && !this.agentWebContents.isDestroyed()) {
+        this.agentWebContents.send(APP_PLATFORM_CHANNELS.AGENT_NAVIGATION_INTENT_RECEIVED, intent)
+      } else {
+        this.queuedAgentNavigationIntents.push(intent)
+      }
+      return
+    }
+
+    this.agentFullConversationSessionId = normalizedSessionId
+    if (this.agentPanelConversationSessionId === normalizedSessionId) return
+    if (this.agentPanelRendererReady && !this.window.webContents.isDestroyed()) {
+      this.window.webContents.send(APP_PLATFORM_CHANNELS.AGENT_NAVIGATION_INTENT_RECEIVED, intent)
+    } else {
+      this.queuedAgentPanelNavigationIntents.push(intent)
     }
   }
 
@@ -1222,6 +1263,8 @@ export class ShellViewManager {
     this.agentWebContents = null
     this.agentRendererReady = false
     this.agentPanelRendererReady = false
+    this.agentFullConversationSessionId = null
+    this.agentPanelConversationSessionId = null
     this.homeWebContents = null
     this.settingsWebContents = null
   }

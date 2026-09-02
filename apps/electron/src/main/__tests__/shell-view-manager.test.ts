@@ -391,6 +391,62 @@ describe('ShellViewManager webview lifecycle', () => {
     expect(agent.send).toHaveBeenCalledWith('app-platform:agent-command-received', 'new-session')
   })
 
+  it('synchronizes selected conversations between Full Agent and Panel renderers', () => {
+    const window = createWindow()
+    const manager = new ShellViewManager({
+      window: window as any,
+      workspaceId: 'ws-1',
+      initialActiveTarget: 'home',
+      externalAppRegistry: createExternalAppRegistry() as any,
+      registerSurface: () => {},
+      unregisterSurface: () => {},
+    })
+    const agent = createGuest(20, manager.getWebviewBootstrap().agentSrc)
+    expect(manager.attachGuest(agent as any)).toBe(true)
+    manager.markAgentRendererReady(window.webContents.id)
+    manager.markAgentRendererReady(20)
+
+    manager.syncAgentConversation(20, 'session-from-full')
+    expect(window.webContents.send).toHaveBeenCalledWith(
+      'app-platform:agent-navigation-intent-received',
+      { type: 'conversation', sessionId: 'session-from-full' },
+    )
+
+    manager.syncAgentConversation(window.webContents.id, 'session-from-panel')
+    expect(agent.send).toHaveBeenCalledWith(
+      'app-platform:agent-navigation-intent-received',
+      { type: 'conversation', sessionId: 'session-from-panel' },
+    )
+
+    // Sending is not an acknowledgement. If Full has not reported the new
+    // selection yet, opening Full must deliver Panel's authoritative session again.
+    agent.send.mockClear()
+    manager.focusAgentTab()
+    expect(agent.send).toHaveBeenCalledWith(
+      'app-platform:agent-navigation-intent-received',
+      { type: 'conversation', sessionId: 'session-from-panel' },
+    )
+
+    // Full acknowledgement converges both surfaces and stops further delivery.
+    manager.syncAgentConversation(20, 'session-from-panel')
+
+    window.webContents.send.mockClear()
+    manager.syncAgentConversation(20, 'session-from-panel')
+    expect(window.webContents.send).not.toHaveBeenCalledWith(
+      'app-platform:agent-navigation-intent-received',
+      { type: 'conversation', sessionId: 'session-from-panel' },
+    )
+
+    agent.send.mockClear()
+    agent.emit('did-start-navigation')
+    manager.markAgentRendererReady(20)
+    manager.syncAgentConversation(window.webContents.id, 'session-from-panel')
+    expect(agent.send).toHaveBeenCalledWith(
+      'app-platform:agent-navigation-intent-received',
+      { type: 'conversation', sessionId: 'session-from-panel' },
+    )
+  })
+
   it('unfocuses Full Agent when Home or an app tab is activated', () => {
     const manager = new ShellViewManager({
       window: createWindow() as any,

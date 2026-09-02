@@ -330,6 +330,7 @@ export interface ElectronAPI {
   toggleAgentPanel(): Promise<void>
   openSettings(subpage?: SettingsSubpage): Promise<void>
   onAgentShellCommand(callback: (command: AgentShellCommand) => void): () => void
+  syncAgentConversation(sessionId: string): Promise<void>
   onAgentNavigationIntent(callback: (intent: AgentNavigationIntent) => void): () => void
   notifyAgentRendererReady(): Promise<void>
 

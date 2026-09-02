@@ -681,6 +681,9 @@ app.whenReady().then(async () => {
     ipcMain.handle(APP_PLATFORM_CHANNELS.AGENT_COMMAND, (event, command: AgentShellCommand) =>
       getShellViews(event.sender.id, ['shell']).sendAgentCommand(command)
     )
+    ipcMain.handle(APP_PLATFORM_CHANNELS.SYNC_AGENT_CONVERSATION, (event, sessionId: string) =>
+      getShellViews(event.sender.id, ['shell', 'agent']).syncAgentConversation(event.sender.id, sessionId)
+    )
     ipcMain.handle(APP_PLATFORM_CHANNELS.AGENT_RENDERER_READY, event =>
       getShellViews(event.sender.id, ['shell', 'agent']).markAgentRendererReady(event.sender.id)
     )

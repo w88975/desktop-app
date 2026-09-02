@@ -159,6 +159,7 @@ export const APP_PLATFORM_CHANNELS = {
   AGENT_PRESENTATION_CHANGED: 'app-platform:agent-presentation-changed',
   AGENT_COMMAND: 'app-platform:agent-command',
   AGENT_COMMAND_RECEIVED: 'app-platform:agent-command-received',
+  SYNC_AGENT_CONVERSATION: 'app-platform:sync-agent-conversation',
   AGENT_NAVIGATION_INTENT_RECEIVED: 'app-platform:agent-navigation-intent-received',
   AGENT_RENDERER_READY: 'app-platform:agent-renderer-ready',
   LIST_INSTALLED_APPS: 'app-platform:list-installed-apps',

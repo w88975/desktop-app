@@ -122,6 +122,7 @@ export function PanelHeader({
   const appShellContext = useOptionalAppShellContext()
   const contextLeadingAction = appShellContext?.leadingAction
   const isCompactMode = appShellContext?.isCompactMode ?? false
+  const centerPanelHeaderTitle = appShellContext?.centerPanelHeaderTitle ?? false
   const leadingAction = explicitLeadingAction ?? contextLeadingAction
 
   // Use context as fallback when prop is not explicitly set.
@@ -232,6 +233,25 @@ export function PanelHeader({
         <div className="max-w-full overflow-hidden pointer-events-auto">
           {titleNode}
         </div>
+      </div>
+    </>
+  ) : centerPanelHeaderTitle ? (
+    <>
+      <div className="flex flex-1 items-center justify-start titlebar-no-drag">
+        {leadingAction}
+      </div>
+      <div
+        className="pointer-events-none absolute inset-y-0 left-1/2 flex -translate-x-1/2 items-center justify-center"
+        style={{ width: 'calc(100% - 192px)' }}
+      >
+        <div className="max-w-full overflow-hidden pointer-events-auto">
+          {titleNode}
+        </div>
+      </div>
+      <div className="flex flex-1 items-center justify-end gap-1.5 titlebar-no-drag">
+        {centerButton}
+        {actions}
+        {rightSidebarButton}
       </div>
     </>
   ) : (

@@ -36,6 +36,7 @@ type ApiToChannelMapKeys = Exclude<
   | 'toggleAgentPanel' // direct app-platform IPC
   | 'openSettings' // direct app-platform IPC
   | 'onAgentShellCommand' // direct app-platform IPC listener
+  | 'syncAgentConversation' // direct app-platform IPC
   | 'onAgentNavigationIntent' // direct app-platform IPC listener
   | 'notifyAgentRendererReady' // direct app-platform IPC
 > | BrowserPaneKeys
